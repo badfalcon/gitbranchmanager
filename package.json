@@ -1,0 +1,83 @@
+{
+  "name": "gitbranchmanager",
+  "displayName": "git-branch-manager",
+  "description": "Manages git branches.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.106.1"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:gitbranchmanager.openManager"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "gitbranchmanager.openManager",
+        "title": "ブランチ管理: 開く (Branch Manager)"
+      },
+      {
+        "command": "gitbranchmanager.helloWorld",
+        "title": "Hello World"
+      }
+    ],
+    "configuration": {
+      "title": "Git Branch Manager",
+      "properties": {
+        "gitBranchManager.baseBranch": {
+          "type": "string",
+          "default": "auto",
+          "description": "デッドブランチの基準ブランチ。'auto' で origin/HEAD を自動検出。"
+        },
+        "gitBranchManager.protectedBranches": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["main", "master", "develop"],
+          "description": "削除/検出対象から除外する保護ブランチ。'release/' のようなプレフィックス指定可。"
+        },
+        "gitBranchManager.confirmBeforeDelete": {
+          "type": "boolean",
+          "default": true,
+          "description": "削除などの破壊的操作の前に確認ダイアログを表示する。"
+        },
+        "gitBranchManager.forceDeleteLocal": {
+          "type": "boolean",
+          "default": false,
+          "description": "ローカルブランチ削除を強制 (--force) する。"
+        },
+        "gitBranchManager.includeRemoteInDeadCleanup": {
+          "type": "boolean",
+          "default": false,
+          "description": "デッドブランチ削除時に対応するリモートブランチも削除する。"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.106.1",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "typescript-eslint": "^8.48.1",
+    "eslint": "^9.39.1",
+    "typescript": "^5.9.3",
+    "ts-loader": "^9.5.4",
+    "webpack": "^5.103.0",
+    "webpack-cli": "^6.0.1",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2"
+  }
+}
