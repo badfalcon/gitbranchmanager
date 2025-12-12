@@ -12,6 +12,7 @@ type BranchRow = {
   upstream?: string; // e.g. origin/main
   ahead?: number;
   behind?: number;
+  protected?: boolean;
 };
 
 type RepoContext = {
@@ -56,6 +57,9 @@ export async function activate(context: vscode.ExtensionContext) {
           case 'refresh':
             await refresh();
             break;
+          case 'openLogTerminal':
+            await openLogInTerminal(repo.repoRoot, msg.ref);
+            break;
           case 'checkout':
             await checkoutBranch(repo.repoRoot, msg.name);
             await refresh();
@@ -71,12 +75,23 @@ export async function activate(context: vscode.ExtensionContext) {
           case 'rename': {
             const newName = await vscode.window.showInputBox({ prompt: `新しいブランチ名（${msg.oldName} → ?）`, validateInput: simpleBranchNameValidator, value: msg.oldName });
             if (!newName || newName === msg.oldName) break;
+            {
+              const cfg = getCfg();
+              if (isProtected(msg.oldName, cfg.protected)) {
+                vscode.window.showWarningMessage('保護ブランチはリネームできません');
+                break;
+              }
+            }
             await renameBranch(repo.repoRoot, msg.oldName, newName);
             await refresh();
             break;
           }
           case 'deleteLocal': {
             const cfg = getCfg();
+            if (isProtected(msg.name, cfg.protected)) {
+              vscode.window.showWarningMessage('保護ブランチは削除できません');
+              break;
+            }
             const proceed = !cfg.confirmBeforeDelete || await confirm(`ローカルブランチ ${msg.name} を削除しますか？`);
             if (proceed) {
               await deleteLocalBranch(repo.repoRoot, msg.name, cfg.forceDeleteLocal);
@@ -85,6 +100,18 @@ export async function activate(context: vscode.ExtensionContext) {
             break;
           }
           case 'mergeIntoCurrent': {
+            {
+              const current = await getCurrentBranch(repo.repoRoot);
+              if (current && msg.source === current) {
+                vscode.window.showInformationMessage('現在のブランチに対して自身をマージする操作は無効です');
+                break;
+              }
+              const cfg = getCfg();
+              if (isProtected(msg.source, cfg.protected)) {
+                vscode.window.showWarningMessage('保護ブランチはマージ元に指定できません');
+                break;
+              }
+            }
             const proceed = await confirm(`現在のブランチに ${msg.source} をマージしますか？`);
             if (proceed) {
               await mergeIntoCurrent(repo.repoRoot, msg.source);
@@ -93,6 +120,13 @@ export async function activate(context: vscode.ExtensionContext) {
             break;
           }
           case 'deleteRemote': {
+            {
+              const cfg = getCfg();
+              if (isProtected(msg.name, cfg.protected)) {
+                vscode.window.showWarningMessage('保護ブランチはリモート削除できません');
+                break;
+              }
+            }
             const proceed = await confirm(`リモートブランチ ${msg.remote}/${msg.name} を削除しますか？`);
             if (proceed) {
               await deleteRemoteBranch(repo.repoRoot, msg.remote, msg.name);
@@ -128,7 +162,9 @@ export async function activate(context: vscode.ExtensionContext) {
                     if (up && up.includes('/')) {
                       const [remote, ...rest] = up.split('/');
                       const rName = rest.join('/');
-                      try { await deleteRemoteBranch(repo.repoRoot, remote, rName); } catch { /* ignore */ }
+                      if (!isProtected(rName, cfg.protected)) {
+                        try { await deleteRemoteBranch(repo.repoRoot, remote, rName); } catch { /* ignore */ }
+                      }
                     }
                   }
                 }
@@ -195,9 +231,11 @@ async function listLocalBranches(cwd: string): Promise<BranchRow[]> {
   const fmt = '%(refname)\t%(refname:short)\t%(upstream:short)\t%(upstream:trackshort)\t%(HEAD)';
   const { stdout } = await runGit(cwd, ['for-each-ref', '--format', fmt, 'refs/heads']);
   const rows: BranchRow[] = [];
+  const cfg = getCfg();
   for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
     const [fullRef, short, upstream, track, headMark] = line.split('\t');
     const row: BranchRow = { fullRef, short, kind: 'local' };
+    row.protected = isProtected(short, cfg.protected);
     if (upstream) row.upstream = upstream;
     if (headMark === '*') row.isCurrent = true;
     if (track) {
@@ -217,11 +255,16 @@ async function listRemoteBranches(cwd: string): Promise<BranchRow[]> {
   const fmt = '%(refname)\t%(refname:short)';
   const { stdout } = await runGit(cwd, ['for-each-ref', '--format', fmt, 'refs/remotes']);
   const rows: BranchRow[] = [];
+  const cfg = getCfg();
   for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
     const [fullRef, short] = line.split('\t');
     // skip HEAD pointers like refs/remotes/origin/HEAD
     if (/\/HEAD$/.test(fullRef)) continue;
-    rows.push({ fullRef, short, kind: 'remote' });
+    const parts = short.split('/');
+    parts.shift();
+    const name = parts.join('/');
+    const prot = isProtected(name, cfg.protected);
+    rows.push({ fullRef, short, kind: 'remote', protected: prot });
   }
   return rows;
 }
@@ -339,6 +382,40 @@ async function runGit(cwd: string, args: string[]) {
   return { stdout: stdout.toString() };
 }
 
+// ======== Git Log helpers ========
+
+type LogEntry = { hash: string; date: string; author: string; subject: string };
+
+async function getLogEntries(cwd: string, ref: string, max: number): Promise<LogEntry[]> {
+  const pretty = '%H\t%ad\t%an\t%s';
+  const { stdout } = await runGit(cwd, ['log', `--pretty=format:${pretty}`, '--date=iso-strict', '-n', String(max), ref]);
+  const lines = stdout.split(/\r?\n/).filter(Boolean);
+  const result: LogEntry[] = [];
+  for (const line of lines) {
+    const [hash, date, author, subject] = line.split('\t');
+    if (!hash) continue;
+    result.push({ hash, date, author, subject: subject ?? '' });
+  }
+  return result;
+}
+
+async function showCommitDetails(cwd: string, hash: string) {
+  const cfg = vscode.workspace.getConfiguration('gitBranchManager');
+  const showPatch = cfg.get<boolean>('log.showPatch', true);
+  const args = ['show', '--date=short'];
+  if (showPatch) args.push('--patch'); else args.push('--stat');
+  args.push(hash);
+  const { stdout } = await execFileAsync('git', args, { cwd, windowsHide: true, maxBuffer: 1024 * 1024 });
+  const doc = await vscode.workspace.openTextDocument({ content: stdout.toString(), language: 'diff' });
+  await vscode.window.showTextDocument(doc, { preview: true });
+}
+
+async function openLogInTerminal(cwd: string, ref: string) {
+  const term = vscode.window.createTerminal({ cwd, name: 'Git Log' });
+  term.show();
+  term.sendText(`git log --oneline --graph --decorate ${ref}`);
+}
+
 function getHtml(nonce: string) {
   const csp = `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';`;
   return `<!DOCTYPE html>
@@ -350,7 +427,7 @@ function getHtml(nonce: string) {
 body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); }
 .toolbar { margin: 8px 0; display: flex; gap: 8px; align-items: center; }
 .table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-.table th, .table td { border-bottom: 1px solid var(--vscode-editorGroup-border); padding: 6px 8px; font-size: 12px; }
+.table th, .table td { border-bottom: 1px solid var(--vscode-editorGroup-border); padding: 6px 8px; font-size: 12px; text-align: left; }
 .badge { padding: 1px 6px; border-radius: 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
 .btn { padding: 2px 8px; border: 1px solid var(--vscode-button-border, transparent); background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); cursor: pointer; border-radius: 4px; }
 .btn.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
@@ -423,9 +500,14 @@ code { font-family: var(--vscode-editor-font-family); }
           + '<td class="actions"></td>';
         const actions = tr.querySelector('.actions');
         actions.appendChild(btn('Checkout', () => vscode.postMessage({ type: 'checkout', name: r.short })));
-        actions.appendChild(btn('Rename', () => vscode.postMessage({ type: 'rename', oldName: r.short })));
-        actions.appendChild(btn('Delete', () => vscode.postMessage({ type: 'deleteLocal', name: r.short })));
-        actions.appendChild(btn('Merge into current', () => vscode.postMessage({ type: 'mergeIntoCurrent', source: r.short })));
+        actions.appendChild(btn('Log', () => vscode.postMessage({ type: 'openLogTerminal', ref: r.short })));
+        if (!r.protected) {
+          actions.appendChild(btn('Rename', () => vscode.postMessage({ type: 'rename', oldName: r.short })));
+          actions.appendChild(btn('Delete', () => vscode.postMessage({ type: 'deleteLocal', name: r.short })));
+          if (!r.isCurrent) {
+            actions.appendChild(btn('Merge into current', () => vscode.postMessage({ type: 'mergeIntoCurrent', source: r.short })));
+          }
+        }
         localEl.appendChild(tr);
       }
     }
@@ -443,7 +525,10 @@ code { font-family: var(--vscode-editor-font-family); }
           + '<td class="actions"></td>';
         const actions = tr.querySelector('.actions');
         actions.appendChild(btn('Checkout', () => vscode.postMessage({ type: 'checkout', name: r.short })));
-        actions.appendChild(btn('Delete Remote', () => vscode.postMessage({ type: 'deleteRemote', remote, name })));
+        actions.appendChild(btn('Log', () => vscode.postMessage({ type: 'openLogTerminal', ref: r.short })));
+        if (!r.protected) {
+          actions.appendChild(btn('Delete Remote', () => vscode.postMessage({ type: 'deleteRemote', remote, name })));
+        }
         remoteEl.appendChild(tr);
       }
     }

@@ -17,7 +17,8 @@
     "commands": [
       {
         "command": "gitbranchmanager.openManager",
-        "title": "ブランチ管理: 開く (Branch Manager)"
+        "title": "ブランチ管理: 開く (Branch Manager)",
+        "icon": "$(git-branch)"
       },
       {
         "command": "gitbranchmanager.helloWorld",
@@ -54,6 +55,15 @@
           "description": "デッドブランチ削除時に対応するリモートブランチも削除する。"
         }
       }
+    },
+    "menus": {
+      "scm/title": [
+        {
+          "command": "gitbranchmanager.openManager",
+          "group": "navigation@10",
+          "when": "scmProvider == git"
+        }
+      ]
     }
   },
   "scripts": {
