@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Security-Policy" content="{{CSP}}">
+<meta charset="UTF-8" />
+<style>
+body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); }
+.toolbar { margin: 8px 0; display: flex; gap: 8px; align-items: center; }
+.table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.table th, .table td { border-bottom: 1px solid var(--vscode-editorGroup-border); padding: 6px 8px; font-size: 12px; text-align: left; }
+.badge { padding: 1px 6px; border-radius: 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
+.btn { padding: 2px 8px; border: 1px solid var(--vscode-button-border, transparent); background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); cursor: pointer; border-radius: 4px; }
+.btn.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+.section { margin-top: 16px; }
+.actions button { margin-right: 6px; }
+code { font-family: var(--vscode-editor-font-family); }
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <button class="btn primary" id="refresh">Refresh</button>
+    <button class="btn" id="create">Create</button>
+    <button class="btn" id="detectDead">Detect Dead</button>
+    <span id="repo"></span>
+    <span id="error" style="color: var(--vscode-errorForeground);"></span>
+  </div>
+
+  <div class="section">
+    <h3>Local Branches</h3>
+    <table class="table" id="local"></table>
+  </div>
+
+  <div class="section">
+    <h3>Remote Branches</h3>
+    <table class="table" id="remote"></table>
+  </div>
+
+  <script nonce="{{NONCE}}">
+    const vscode = acquireVsCodeApi();
+
+    const $ = (id) => document.getElementById(id);
+    const localEl = $('local');
+    const remoteEl = $('remote');
+    const repoEl = $('repo');
+    const errEl = $('error');
+
+    $('refresh').addEventListener('click', () => vscode.postMessage({ type: 'refresh' }));
+    $('create').addEventListener('click', () => vscode.postMessage({ type: 'create' }));
+    $('detectDead').addEventListener('click', () => vscode.postMessage({ type: 'detectDead' }));
+
+    window.addEventListener('message', (e) => {
+      const msg = e.data;
+      if (msg.type === 'state') {
+        errEl.textContent = '';
+        render(msg.state);
+      } else if (msg.type === 'error') {
+        errEl.textContent = msg.message || 'Error';
+      }
+    });
+
+    function render(state) {
+      repoEl.textContent = state.repoRoot;
+      localEl.innerHTML = '';
+      remoteEl.innerHTML = '';
+      renderLocal(state.locals);
+      renderRemote(state.remotes);
+    }
+
+    function renderLocal(rows) {
+      const header = '<tr><th>Current</th><th>Name</th><th>Upstream</th><th>Ahead</th><th>Behind</th><th>Actions</th></tr>';
+      localEl.insertAdjacentHTML('beforeend', header);
+      for (const r of rows) {
+        const cur = r.isCurrent ? '<span class="badge">HEAD</span>' : '';
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + cur + '</td>'
+          + '<td><code>' + escapeHtml(r.short) + '</code></td>'
+          + '<td>' + (r.upstream ? '<code>' + escapeHtml(r.upstream) + '</code>' : '') + '</td>'
+          + '<td>' + (r.ahead ?? '') + '</td>'
+          + '<td>' + (r.behind ?? '') + '</td>'
+          + '<td class="actions"></td>';
+        const actions = tr.querySelector('.actions');
+        actions.appendChild(btn('Checkout', () => vscode.postMessage({ type: 'checkout', name: r.short })));
+        actions.appendChild(btn('Log', () => vscode.postMessage({ type: 'openLogTerminal', ref: r.short })));
+        if (!r.protected) {
+          actions.appendChild(btn('Rename', () => vscode.postMessage({ type: 'rename', oldName: r.short })));
+          actions.appendChild(btn('Delete', () => vscode.postMessage({ type: 'deleteLocal', name: r.short })));
+          if (!r.isCurrent) {
+            actions.appendChild(btn('Merge into current', () => vscode.postMessage({ type: 'mergeIntoCurrent', source: r.short })));
+          }
+        }
+        localEl.appendChild(tr);
+      }
+    }
+
+    function renderRemote(rows) {
+      const header = '<tr><th>Remote</th><th>Name</th><th>Actions</th></tr>';
+      remoteEl.insertAdjacentHTML('beforeend', header);
+      for (const r of rows) {
+        const parts = r.short.split('/');
+        const remote = parts.shift();
+        const name = parts.join('/');
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + escapeHtml(remote) + '</td>'
+          + '<td><code>' + escapeHtml(name) + '</code></td>'
+          + '<td class="actions"></td>';
+        const actions = tr.querySelector('.actions');
+        actions.appendChild(btn('Checkout', () => vscode.postMessage({ type: 'checkout', name: r.short })));
+        actions.appendChild(btn('Log', () => vscode.postMessage({ type: 'openLogTerminal', ref: r.short })));
+        if (!r.protected) {
+          actions.appendChild(btn('Delete Remote', () => vscode.postMessage({ type: 'deleteRemote', remote, name })));
+        }
+        remoteEl.appendChild(tr);
+      }
+    }
+
+    function btn(label, onClick) {
+      const b = document.createElement('button');
+      b.className = 'btn';
+      b.textContent = label;
+      b.addEventListener('click', onClick);
+      return b;
+    }
+
+    function escapeHtml(s) {
+      const AMP = '&' + 'amp;';
+      const LT = '&' + 'lt;';
+      const GT = '&' + 'gt;';
+      const QUOT = '&' + 'quot;';
+      const APOS = '&' + '#39;';
+      return String(s)
+        .replace(/&/g, AMP)
+        .replace(/</g, LT)
+        .replace(/>/g, GT)
+        .replace(/"/g, QUOT)
+        .replace(/'/g, APOS);
+    }
+
+    vscode.postMessage({ type: 'ready' });
+  </script>
+</body>
+</html>

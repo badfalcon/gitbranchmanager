@@ -19,10 +19,6 @@
         "command": "gitbranchmanager.openManager",
         "title": "ブランチ管理: 開く (Branch Manager)",
         "icon": "$(git-branch)"
-      },
-      {
-        "command": "gitbranchmanager.helloWorld",
-        "title": "Hello World"
       }
     ],
     "configuration": {

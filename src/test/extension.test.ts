@@ -1,15 +1,38 @@
 import * as assert from 'assert';
 
-// You can import and use all API from the 'vscode' module
-// as well as import your extension to test it
-import * as vscode from 'vscode';
-// import * as myExtension from '../../extension';
+import { escapeHtml, isProtectedBranch, parseTrackShort } from '../app';
 
-suite('Extension Test Suite', () => {
-	vscode.window.showInformationMessage('Start all tests.');
+suite('Unit functions', () => {
+  test('isProtectedBranch: exact', () => {
+    assert.strictEqual(isProtectedBranch('main', ['main']), true);
+    assert.strictEqual(isProtectedBranch('dev', ['main']), false);
+  });
 
-	test('Sample test', () => {
-		assert.strictEqual(-1, [1, 2, 3].indexOf(5));
-		assert.strictEqual(-1, [1, 2, 3].indexOf(0));
-	});
+  test('isProtectedBranch: prefix', () => {
+    assert.strictEqual(isProtectedBranch('release/1.0', ['release/*']), true);
+    assert.strictEqual(isProtectedBranch('feature/x', ['release/*']), false);
+  });
+
+  test('isProtectedBranch: glob', () => {
+    assert.strictEqual(isProtectedBranch('hotfix/a/wip', ['hotfix/*/wip']), true);
+    assert.strictEqual(isProtectedBranch('hotfix/a/done', ['hotfix/*/wip']), false);
+  });
+
+  test('parseTrackShort', () => {
+    assert.deepStrictEqual(parseTrackShort('+1 -2'), { ahead: 1, behind: 2 });
+    assert.deepStrictEqual(parseTrackShort('+3'), { ahead: 3 });
+    assert.deepStrictEqual(parseTrackShort('-4'), { behind: 4 });
+    assert.deepStrictEqual(parseTrackShort('<>'), {});
+    assert.deepStrictEqual(parseTrackShort(undefined), {});
+  });
+
+  test('escapeHtml', () => {
+    // Avoid putting literal "<" etc. here because some tooling may de-entity it.
+    const LT = '&' + 'lt;';
+    const GT = '&' + 'gt;';
+    const AMP = '&' + 'amp;';
+    const QUOT = '&' + 'quot;';
+    const APOS = '&' + '#39;';
+    assert.strictEqual(escapeHtml('<>&"\''), `${LT}${GT}${AMP}${QUOT}${APOS}`);
+  });
 });
