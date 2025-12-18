@@ -18,31 +18,41 @@ code { font-family: var(--vscode-editor-font-family); }
 </head>
 <body>
   <div class="toolbar">
-    <button class="btn primary" id="refresh">Refresh</button>
-    <button class="btn" id="create">Create</button>
-    <button class="btn" id="detectDead">Detect Dead</button>
+    <button class="btn primary" id="refresh"></button>
+    <button class="btn" id="create"></button>
+    <button class="btn" id="detectDead"></button>
     <span id="repo"></span>
     <span id="error" style="color: var(--vscode-errorForeground);"></span>
   </div>
 
   <div class="section">
-    <h3>Local Branches</h3>
+    <h3 id="localTitle"></h3>
     <table class="table" id="local"></table>
   </div>
 
   <div class="section">
-    <h3>Remote Branches</h3>
+    <h3 id="remoteTitle"></h3>
     <table class="table" id="remote"></table>
   </div>
 
   <script nonce="{{NONCE}}">
     const vscode = acquireVsCodeApi();
+    // I18N is injected by the extension at runtime.
+    // Keep this line valid JS even before injection to avoid editor parse errors.
+    const I18N = JSON.parse(atob('{{I18N_B64}}'));
 
     const $ = (id) => document.getElementById(id);
     const localEl = $('local');
     const remoteEl = $('remote');
     const repoEl = $('repo');
     const errEl = $('error');
+
+    // Static labels
+    $('refresh').textContent = I18N.refresh;
+    $('create').textContent = I18N.create;
+    $('detectDead').textContent = I18N.detectDead;
+    $('localTitle').textContent = I18N.localBranches;
+    $('remoteTitle').textContent = I18N.remoteBranches;
 
     $('refresh').addEventListener('click', () => vscode.postMessage({ type: 'refresh' }));
     $('create').addEventListener('click', () => vscode.postMessage({ type: 'create' }));
@@ -54,7 +64,7 @@ code { font-family: var(--vscode-editor-font-family); }
         errEl.textContent = '';
         render(msg.state);
       } else if (msg.type === 'error') {
-        errEl.textContent = msg.message || 'Error';
+        errEl.textContent = msg.message || I18N.errorFallback;
       }
     });
 
@@ -67,10 +77,10 @@ code { font-family: var(--vscode-editor-font-family); }
     }
 
     function renderLocal(rows) {
-      const header = '<tr><th>Current</th><th>Name</th><th>Upstream</th><th>Ahead</th><th>Behind</th><th>Actions</th></tr>';
+      const header = '<tr><th>' + escapeHtml(I18N.localHeaderCurrent) + '</th><th>' + escapeHtml(I18N.localHeaderName) + '</th><th>' + escapeHtml(I18N.localHeaderUpstream) + '</th><th>' + escapeHtml(I18N.localHeaderAhead) + '</th><th>' + escapeHtml(I18N.localHeaderBehind) + '</th><th>' + escapeHtml(I18N.localHeaderActions) + '</th></tr>';
       localEl.insertAdjacentHTML('beforeend', header);
       for (const r of rows) {
-        const cur = r.isCurrent ? '<span class="badge">HEAD</span>' : '';
+        const cur = r.isCurrent ? '<span class="badge">' + escapeHtml(I18N.badgeHead) + '</span>' : '';
         const tr = document.createElement('tr');
         tr.innerHTML = '<td>' + cur + '</td>'
           + '<td><code>' + escapeHtml(r.short) + '</code></td>'
@@ -79,13 +89,13 @@ code { font-family: var(--vscode-editor-font-family); }
           + '<td>' + (r.behind ?? '') + '</td>'
           + '<td class="actions"></td>';
         const actions = tr.querySelector('.actions');
-        actions.appendChild(btn('Checkout', () => vscode.postMessage({ type: 'checkout', name: r.short })));
-        actions.appendChild(btn('Log', () => vscode.postMessage({ type: 'openLogTerminal', ref: r.short })));
+        actions.appendChild(btn(I18N.actionCheckout, () => vscode.postMessage({ type: 'checkout', name: r.short })));
+        actions.appendChild(btn(I18N.actionLog, () => vscode.postMessage({ type: 'openLogTerminal', ref: r.short })));
         if (!r.protected) {
-          actions.appendChild(btn('Rename', () => vscode.postMessage({ type: 'rename', oldName: r.short })));
-          actions.appendChild(btn('Delete', () => vscode.postMessage({ type: 'deleteLocal', name: r.short })));
+          actions.appendChild(btn(I18N.actionRename, () => vscode.postMessage({ type: 'rename', oldName: r.short })));
+          actions.appendChild(btn(I18N.actionDelete, () => vscode.postMessage({ type: 'deleteLocal', name: r.short })));
           if (!r.isCurrent) {
-            actions.appendChild(btn('Merge into current', () => vscode.postMessage({ type: 'mergeIntoCurrent', source: r.short })));
+            actions.appendChild(btn(I18N.actionMergeIntoCurrent, () => vscode.postMessage({ type: 'mergeIntoCurrent', source: r.short })));
           }
         }
         localEl.appendChild(tr);
@@ -93,7 +103,7 @@ code { font-family: var(--vscode-editor-font-family); }
     }
 
     function renderRemote(rows) {
-      const header = '<tr><th>Remote</th><th>Name</th><th>Actions</th></tr>';
+      const header = '<tr><th>' + escapeHtml(I18N.remoteHeaderRemote) + '</th><th>' + escapeHtml(I18N.remoteHeaderName) + '</th><th>' + escapeHtml(I18N.remoteHeaderActions) + '</th></tr>';
       remoteEl.insertAdjacentHTML('beforeend', header);
       for (const r of rows) {
         const parts = r.short.split('/');
@@ -104,10 +114,10 @@ code { font-family: var(--vscode-editor-font-family); }
           + '<td><code>' + escapeHtml(name) + '</code></td>'
           + '<td class="actions"></td>';
         const actions = tr.querySelector('.actions');
-        actions.appendChild(btn('Checkout', () => vscode.postMessage({ type: 'checkout', name: r.short })));
-        actions.appendChild(btn('Log', () => vscode.postMessage({ type: 'openLogTerminal', ref: r.short })));
+        actions.appendChild(btn(I18N.actionCheckout, () => vscode.postMessage({ type: 'checkout', name: r.short })));
+        actions.appendChild(btn(I18N.actionLog, () => vscode.postMessage({ type: 'openLogTerminal', ref: r.short })));
         if (!r.protected) {
-          actions.appendChild(btn('Delete Remote', () => vscode.postMessage({ type: 'deleteRemote', remote, name })));
+          actions.appendChild(btn(I18N.actionDeleteRemote, () => vscode.postMessage({ type: 'deleteRemote', remote, name })));
         }
         remoteEl.appendChild(tr);
       }

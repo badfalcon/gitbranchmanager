@@ -1,0 +1,65 @@
+{
+  "gitBranchManager.activated": "Git Branch Manager activated",
+
+  "errors.noGitRepo": "No Git repository found. Open a folder or initialize Git.",
+
+  "ui.branchNameRequired": "Please enter a branch name.",
+  "ui.branchNameNoWhitespace": "Whitespace is not allowed.",
+  "ui.branchNameInvalidChars": "Contains invalid characters (~ ^ : \\ ? * [ ]).",
+  "ui.branchNameInvalidEnding": "A branch name cannot end with '.' or '/'.",
+  "ui.branchNameInvalidSequences": "'..' and consecutive '/' are not allowed.",
+
+  "ui.confirm.yes": "Yes",
+
+  "ui.pickRepo.title": "Select a Git repository",
+
+  "panel.title": "Branch Manager",
+  "terminal.gitLog.name": "Git Log",
+
+  "panel.prompt.newBranchName": "New branch name",
+  "panel.prompt.baseBranchOptional": "Base branch (optional, e.g. main)",
+  "panel.prompt.renameBranch": "New branch name ({0} → ?)",
+
+  "panel.warn.protectedCannotRename": "Protected branches cannot be renamed.",
+  "panel.warn.protectedCannotDelete": "Protected branches cannot be deleted.",
+  "panel.info.mergeSelfInvalid": "Merging a branch into itself is not allowed.",
+  "panel.warn.protectedCannotMergeSource": "Protected branches cannot be selected as the merge source.",
+  "panel.warn.protectedCannotDeleteRemote": "Protected branches cannot be deleted remotely.",
+
+  "panel.confirm.deleteLocal": "Delete local branch {0}?",
+  "panel.confirm.mergeIntoCurrent": "Merge {0} into the current branch?",
+  "panel.confirm.deleteRemote": "Delete remote branch {0}/{1}?",
+
+  "panel.info.noDeadBranches": "No dead branches found (base: {0}).",
+  "panel.pickDeadBranches.title": "Select dead branches to delete (base: {0})",
+  "panel.confirm.deleteDeadCount": "Delete {0} selected local branches?",
+
+  "webview.error.fallback": "Error",
+
+  "webview.toolbar.refresh": "Refresh",
+  "webview.toolbar.create": "Create",
+  "webview.toolbar.detectDead": "Detect Dead",
+
+  "webview.section.local": "Local Branches",
+  "webview.section.remote": "Remote Branches",
+
+  "webview.table.local.current": "Current",
+  "webview.table.local.name": "Name",
+  "webview.table.local.upstream": "Upstream",
+  "webview.table.local.ahead": "Ahead",
+  "webview.table.local.behind": "Behind",
+  "webview.table.local.actions": "Actions",
+
+  "webview.table.remote.remote": "Remote",
+  "webview.table.remote.name": "Name",
+  "webview.table.remote.actions": "Actions",
+
+  "webview.action.checkout": "Checkout",
+  "webview.action.log": "Log",
+  "webview.action.rename": "Rename",
+  "webview.action.delete": "Delete",
+  "webview.action.mergeIntoCurrent": "Merge into current",
+  "webview.action.deleteRemote": "Delete Remote",
+
+  "webview.badge.head": "HEAD"
+}

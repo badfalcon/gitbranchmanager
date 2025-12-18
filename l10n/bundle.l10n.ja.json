@@ -1,0 +1,65 @@
+{
+  "gitBranchManager.activated": "Git Branch Manager が有効化されました",
+
+  "errors.noGitRepo": "Git リポジトリが見つかりません。フォルダを開くか Git を初期化してください。",
+
+  "ui.branchNameRequired": "ブランチ名を入力してください",
+  "ui.branchNameNoWhitespace": "空白は使用できません",
+  "ui.branchNameInvalidChars": "無効な文字を含みます (~ ^ : \\ ? * [ ])",
+  "ui.branchNameInvalidEnding": "末尾に . や / は使用できません",
+  "ui.branchNameInvalidSequences": "\"..\" や連続した \"/\" は使用できません",
+
+  "ui.confirm.yes": "はい",
+
+  "ui.pickRepo.title": "Git リポジトリを選択",
+
+  "panel.title": "ブランチマネージャー",
+  "terminal.gitLog.name": "Git Log",
+
+  "panel.prompt.newBranchName": "新しいブランチ名",
+  "panel.prompt.baseBranchOptional": "ベースブランチ（省略可。例: main）",
+  "panel.prompt.renameBranch": "新しいブランチ名（{0} → ?）",
+
+  "panel.warn.protectedCannotRename": "保護ブランチはリネームできません",
+  "panel.warn.protectedCannotDelete": "保護ブランチは削除できません",
+  "panel.info.mergeSelfInvalid": "現在のブランチに対して自身をマージする操作は無効です",
+  "panel.warn.protectedCannotMergeSource": "保護ブランチはマージ元に指定できません",
+  "panel.warn.protectedCannotDeleteRemote": "保護ブランチはリモート削除できません",
+
+  "panel.confirm.deleteLocal": "ローカルブランチ {0} を削除しますか？",
+  "panel.confirm.mergeIntoCurrent": "現在のブランチに {0} をマージしますか？",
+  "panel.confirm.deleteRemote": "リモートブランチ {0}/{1} を削除しますか？",
+
+  "panel.info.noDeadBranches": "デッドブランチはありません（基準: {0}）",
+  "panel.pickDeadBranches.title": "削除するデッドブランチを選択（基準: {0}）",
+  "panel.confirm.deleteDeadCount": "選択した {0} 件のローカルブランチを削除しますか？",
+
+  "webview.error.fallback": "エラー",
+
+  "webview.toolbar.refresh": "更新",
+  "webview.toolbar.create": "作成",
+  "webview.toolbar.detectDead": "デッド検出",
+
+  "webview.section.local": "ローカルブランチ",
+  "webview.section.remote": "リモートブランチ",
+
+  "webview.table.local.current": "現在",
+  "webview.table.local.name": "名前",
+  "webview.table.local.upstream": "Upstream",
+  "webview.table.local.ahead": "Ahead",
+  "webview.table.local.behind": "Behind",
+  "webview.table.local.actions": "操作",
+
+  "webview.table.remote.remote": "Remote",
+  "webview.table.remote.name": "名前",
+  "webview.table.remote.actions": "操作",
+
+  "webview.action.checkout": "Checkout",
+  "webview.action.log": "Log",
+  "webview.action.rename": "Rename",
+  "webview.action.delete": "Delete",
+  "webview.action.mergeIntoCurrent": "現在へマージ",
+  "webview.action.deleteRemote": "リモート削除",
+
+  "webview.badge.head": "HEAD"
+}

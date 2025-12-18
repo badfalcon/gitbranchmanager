@@ -67,25 +67,25 @@ export function getCfg(): ExtensionConfig {
 
 export function simpleBranchNameValidator(input?: string) {
   if (!input) {
-    return 'ブランチ名を入力してください';
+    return vscode.l10n.t('ui.branchNameRequired');
   }
   if (/\s/.test(input)) {
-    return '空白は使用できません';
+    return vscode.l10n.t('ui.branchNameNoWhitespace');
   }
   if (/[~^:\\?*\[\]]/.test(input)) {
-    return '無効な文字を含みます (~ ^ : \\ ? * [ ])';
+    return vscode.l10n.t('ui.branchNameInvalidChars');
   }
   if (input.endsWith('.') || input.endsWith('/')) {
-    return '末尾に . や / は使用できません';
+    return vscode.l10n.t('ui.branchNameInvalidEnding');
   }
   if (input.includes('..') || input.includes('//')) {
-    return '".." や連続した "/" は使用できません';
+    return vscode.l10n.t('ui.branchNameInvalidSequences');
   }
   return undefined;
 }
 
 export async function confirm(message: string) {
-  const yes = 'はい';
+  const yes = vscode.l10n.t('ui.confirm.yes');
   const pick = await vscode.window.showWarningMessage(message, { modal: true }, yes);
   return pick === yes;
 }
@@ -133,7 +133,7 @@ export async function pickRepository(): Promise<RepoContext | undefined> {
 
   const chosen = await vscode.window.showQuickPick(
     okPicks.map((p) => ({ label: p.label, description: p.description, repoRoot: p.repoRoot })),
-    { title: 'Git リポジトリを選択' }
+    { title: vscode.l10n.t('ui.pickRepo.title') }
   );
 
   if (!chosen) {

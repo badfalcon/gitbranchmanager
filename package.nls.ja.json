@@ -1,0 +1,13 @@
+{
+  "extension.displayName": "Git ブランチマネージャー",
+  "extension.description": "Git ブランチを管理します。",
+
+  "command.openManager.title": "ブランチ管理: 開く (Branch Manager)",
+
+  "config.title": "Git Branch Manager",
+  "config.baseBranch.description": "デッドブランチの基準ブランチ。'auto' で origin/HEAD を自動検出します。",
+  "config.protectedBranches.description": "削除/検出対象から除外する保護ブランチ。'release/*' のようなプレフィックス/簡易 glob 指定が可能です。",
+  "config.confirmBeforeDelete.description": "削除などの破壊的操作の前に確認ダイアログを表示します。",
+  "config.forceDeleteLocal.description": "ローカルブランチ削除を強制します (--force / -D)。",
+  "config.includeRemoteInDeadCleanup.description": "デッドブランチ一括削除時に、対応するリモートブランチ削除も試行します。"
+}

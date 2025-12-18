@@ -1,0 +1,13 @@
+{
+  "extension.displayName": "Git Branch Manager",
+  "extension.description": "Manages git branches.",
+
+  "command.openManager.title": "Git Branch Manager: Open",
+
+  "config.title": "Git Branch Manager",
+  "config.baseBranch.description": "Base branch for dead-branch detection. Use 'auto' to detect origin/HEAD automatically.",
+  "config.protectedBranches.description": "Protected branches excluded from delete/detect actions. Prefix/glob patterns like 'release/*' are supported.",
+  "config.confirmBeforeDelete.description": "Show a confirmation dialog before destructive actions such as deleting branches.",
+  "config.forceDeleteLocal.description": "Force-delete local branches (--force / -D).",
+  "config.includeRemoteInDeadCleanup.description": "When cleaning dead branches, also try to delete the corresponding remote branches."
+}

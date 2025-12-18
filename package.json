@@ -1,7 +1,7 @@
 {
   "name": "gitbranchmanager",
-  "displayName": "git-branch-manager",
-  "description": "Manages git branches.",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.106.1"
@@ -17,38 +17,38 @@
     "commands": [
       {
         "command": "gitbranchmanager.openManager",
-        "title": "ブランチ管理: 開く (Branch Manager)",
+        "title": "%command.openManager.title%",
         "icon": "$(git-branch)"
       }
     ],
     "configuration": {
-      "title": "Git Branch Manager",
+      "title": "%config.title%",
       "properties": {
         "gitBranchManager.baseBranch": {
           "type": "string",
           "default": "auto",
-          "description": "デッドブランチの基準ブランチ。'auto' で origin/HEAD を自動検出。"
+          "description": "%config.baseBranch.description%"
         },
         "gitBranchManager.protectedBranches": {
           "type": "array",
           "items": { "type": "string" },
           "default": ["main", "master", "develop"],
-          "description": "削除/検出対象から除外する保護ブランチ。'release/' のようなプレフィックス指定可。"
+          "description": "%config.protectedBranches.description%"
         },
         "gitBranchManager.confirmBeforeDelete": {
           "type": "boolean",
           "default": true,
-          "description": "削除などの破壊的操作の前に確認ダイアログを表示する。"
+          "description": "%config.confirmBeforeDelete.description%"
         },
         "gitBranchManager.forceDeleteLocal": {
           "type": "boolean",
           "default": false,
-          "description": "ローカルブランチ削除を強制 (--force) する。"
+          "description": "%config.forceDeleteLocal.description%"
         },
         "gitBranchManager.includeRemoteInDeadCleanup": {
           "type": "boolean",
           "default": false,
-          "description": "デッドブランチ削除時に対応するリモートブランチも削除する。"
+          "description": "%config.includeRemoteInDeadCleanup.description%"
         }
       }
     },

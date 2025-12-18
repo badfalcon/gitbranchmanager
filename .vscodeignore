@@ -3,7 +3,8 @@
 out/**
 node_modules/**
 src/**
-media/**/*.html
+# Include webview HTML
+!media/branchManager.html
 .gitignore
 .yarnrc
 webpack.config.js

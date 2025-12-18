@@ -45,10 +45,15 @@ async function getState(repoRoot: string): Promise<State> {
 }
 
 export async function openManagerPanel(context: vscode.ExtensionContext, repo: RepoContext) {
-  const panel = vscode.window.createWebviewPanel('gitBranchManager', 'Branch Manager', vscode.ViewColumn.Active, {
-    enableScripts: true,
-    retainContextWhenHidden: true,
-  });
+  const panel = vscode.window.createWebviewPanel(
+    'gitBranchManager',
+    vscode.l10n.t('panel.title'),
+    vscode.ViewColumn.Active,
+    {
+      enableScripts: true,
+      retainContextWhenHidden: true,
+    }
+  );
 
   const nonce = String(Math.random()).slice(2);
   panel.webview.html = await getHtmlFromFile(context, nonce);
@@ -84,14 +89,16 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
 
           case 'create': {
             const name = await vscode.window.showInputBox({
-              prompt: '新しいブランチ名',
+              prompt: vscode.l10n.t('panel.prompt.newBranchName'),
               validateInput: simpleBranchNameValidator,
             });
             if (!name) {
               break;
             }
 
-            const base = await vscode.window.showInputBox({ prompt: 'ベースブランチ（省略可。例: main）' });
+            const base = await vscode.window.showInputBox({
+              prompt: vscode.l10n.t('panel.prompt.baseBranchOptional'),
+            });
 
             await createBranch(repo.repoRoot, name, base || undefined, true);
             await refresh();
@@ -100,7 +107,7 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
 
           case 'rename': {
             const newName = await vscode.window.showInputBox({
-              prompt: `新しいブランチ名（${msg.oldName} → ?）`,
+              prompt: vscode.l10n.t('panel.prompt.renameBranch', msg.oldName),
               validateInput: simpleBranchNameValidator,
               value: msg.oldName,
             });
@@ -110,7 +117,7 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
 
             const cfg = getCfg();
             if (isProtectedBranch(msg.oldName, cfg.protected)) {
-              vscode.window.showWarningMessage('保護ブランチはリネームできません');
+              vscode.window.showWarningMessage(vscode.l10n.t('panel.warn.protectedCannotRename'));
               break;
             }
 
@@ -122,11 +129,13 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
           case 'deleteLocal': {
             const cfg = getCfg();
             if (isProtectedBranch(msg.name, cfg.protected)) {
-              vscode.window.showWarningMessage('保護ブランチは削除できません');
+              vscode.window.showWarningMessage(vscode.l10n.t('panel.warn.protectedCannotDelete'));
               break;
             }
 
-            const proceed = !cfg.confirmBeforeDelete || (await confirm(`ローカルブランチ ${msg.name} を削除しますか？`));
+            const proceed =
+              !cfg.confirmBeforeDelete ||
+              (await confirm(vscode.l10n.t('panel.confirm.deleteLocal', msg.name)));
             if (!proceed) {
               break;
             }
@@ -139,17 +148,17 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
           case 'mergeIntoCurrent': {
             const current = await getCurrentBranch(repo.repoRoot);
             if (current && msg.source === current) {
-              vscode.window.showInformationMessage('現在のブランチに対して自身をマージする操作は無効です');
+              vscode.window.showInformationMessage(vscode.l10n.t('panel.info.mergeSelfInvalid'));
               break;
             }
 
             const cfg = getCfg();
             if (isProtectedBranch(msg.source, cfg.protected)) {
-              vscode.window.showWarningMessage('保護ブランチはマージ元に指定できません');
+              vscode.window.showWarningMessage(vscode.l10n.t('panel.warn.protectedCannotMergeSource'));
               break;
             }
 
-            const proceed = await confirm(`現在のブランチに ${msg.source} をマージしますか？`);
+            const proceed = await confirm(vscode.l10n.t('panel.confirm.mergeIntoCurrent', msg.source));
             if (!proceed) {
               break;
             }
@@ -162,11 +171,11 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
           case 'deleteRemote': {
             const cfg = getCfg();
             if (isProtectedBranch(msg.name, cfg.protected)) {
-              vscode.window.showWarningMessage('保護ブランチはリモート削除できません');
+              vscode.window.showWarningMessage(vscode.l10n.t('panel.warn.protectedCannotDeleteRemote'));
               break;
             }
 
-            const proceed = await confirm(`リモートブランチ ${msg.remote}/${msg.name} を削除しますか？`);
+            const proceed = await confirm(vscode.l10n.t('panel.confirm.deleteRemote', msg.remote, msg.name));
             if (!proceed) {
               break;
             }
@@ -180,7 +189,7 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
             const base = await resolveBaseBranch(repo.repoRoot);
             const dead = await detectDeadBranches(repo.repoRoot, base);
             if (dead.length === 0) {
-              vscode.window.showInformationMessage(`デッドブランチはありません（基準: ${base}）`);
+              vscode.window.showInformationMessage(vscode.l10n.t('panel.info.noDeadBranches', base));
               break;
             }
 
@@ -188,7 +197,7 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
               dead.map((d) => ({ label: d, picked: true })),
               {
                 canPickMany: true,
-                title: `削除するデッドブランチを選択（基準: ${base}）`,
+                title: vscode.l10n.t('panel.pickDeadBranches.title', base),
               }
             );
 
@@ -199,7 +208,9 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
             const cfg = getCfg();
             const names = pick.map((p) => p.label);
 
-            const proceed = !cfg.confirmBeforeDelete || (await confirm(`選択した ${names.length} 件のローカルブランチを削除しますか？`));
+            const proceed =
+              !cfg.confirmBeforeDelete ||
+              (await confirm(vscode.l10n.t('panel.confirm.deleteDeadCount', names.length)));
             if (!proceed) {
               break;
             }
@@ -248,7 +259,7 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
 export async function openManagerCommand(context: vscode.ExtensionContext) {
   const repo = await pickRepository();
   if (!repo) {
-    vscode.window.showWarningMessage('Git リポジトリが見つかりません。フォルダを開くか Git を初期化してください。');
+    vscode.window.showWarningMessage(vscode.l10n.t('errors.noGitRepo'));
     return;
   }
 
@@ -256,21 +267,92 @@ export async function openManagerCommand(context: vscode.ExtensionContext) {
 }
 
 function openLogInTerminal(cwd: string, ref: string) {
-  const term = vscode.window.createTerminal({ cwd, name: 'Git Log' });
+  const term = vscode.window.createTerminal({ cwd, name: vscode.l10n.t('terminal.gitLog.name') });
   term.show();
   term.sendText(`git log --oneline --graph --decorate ${ref}`);
+}
+
+type WebviewI18n = {
+  errorFallback: string;
+
+  refresh: string;
+  create: string;
+  detectDead: string;
+
+  localBranches: string;
+  remoteBranches: string;
+
+  localHeaderCurrent: string;
+  localHeaderName: string;
+  localHeaderUpstream: string;
+  localHeaderAhead: string;
+  localHeaderBehind: string;
+  localHeaderActions: string;
+
+  remoteHeaderRemote: string;
+  remoteHeaderName: string;
+  remoteHeaderActions: string;
+
+  actionCheckout: string;
+  actionLog: string;
+  actionRename: string;
+  actionDelete: string;
+  actionMergeIntoCurrent: string;
+  actionDeleteRemote: string;
+
+  badgeHead: string;
+};
+
+function getWebviewI18n(): WebviewI18n {
+  return {
+    errorFallback: vscode.l10n.t('webview.error.fallback'),
+
+    refresh: vscode.l10n.t('webview.toolbar.refresh'),
+    create: vscode.l10n.t('webview.toolbar.create'),
+    detectDead: vscode.l10n.t('webview.toolbar.detectDead'),
+
+    localBranches: vscode.l10n.t('webview.section.local'),
+    remoteBranches: vscode.l10n.t('webview.section.remote'),
+
+    localHeaderCurrent: vscode.l10n.t('webview.table.local.current'),
+    localHeaderName: vscode.l10n.t('webview.table.local.name'),
+    localHeaderUpstream: vscode.l10n.t('webview.table.local.upstream'),
+    localHeaderAhead: vscode.l10n.t('webview.table.local.ahead'),
+    localHeaderBehind: vscode.l10n.t('webview.table.local.behind'),
+    localHeaderActions: vscode.l10n.t('webview.table.local.actions'),
+
+    remoteHeaderRemote: vscode.l10n.t('webview.table.remote.remote'),
+    remoteHeaderName: vscode.l10n.t('webview.table.remote.name'),
+    remoteHeaderActions: vscode.l10n.t('webview.table.remote.actions'),
+
+    actionCheckout: vscode.l10n.t('webview.action.checkout'),
+    actionLog: vscode.l10n.t('webview.action.log'),
+    actionRename: vscode.l10n.t('webview.action.rename'),
+    actionDelete: vscode.l10n.t('webview.action.delete'),
+    actionMergeIntoCurrent: vscode.l10n.t('webview.action.mergeIntoCurrent'),
+    actionDeleteRemote: vscode.l10n.t('webview.action.deleteRemote'),
+
+    badgeHead: vscode.l10n.t('webview.badge.head'),
+  };
+}
+
+function toBase64UnicodeJson(value: unknown): string {
+  // Embed i18n payload as base64 to keep the HTML template valid JavaScript
+  // before runtime placeholder substitution.
+  const json = JSON.stringify(value);
+  return Buffer.from(json, 'utf8').toString('base64');
 }
 
 async function getHtmlFromFile(context: vscode.ExtensionContext, nonce: string): Promise<string> {
   const csp = `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';`;
 
-  // Read bundled html template
   const htmlPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'branchManager.html');
-  const filePath = htmlPath.fsPath;
+  const html = await readFile(htmlPath.fsPath, 'utf8');
 
-  const html = await readFile(filePath, 'utf8');
+  const i18n = getWebviewI18n();
 
   return html
     .replaceAll('{{CSP}}', csp)
-    .replaceAll('{{NONCE}}', nonce);
+    .replaceAll('{{NONCE}}', nonce)
+    .replaceAll('{{I18N_B64}}', toBase64UnicodeJson(i18n));
 }
