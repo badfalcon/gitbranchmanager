@@ -67,25 +67,25 @@ export function getCfg(): ExtensionConfig {
 
 export function simpleBranchNameValidator(input?: string) {
   if (!input) {
-    return vscode.l10n.t('ui.branchNameRequired');
+    return vscode.l10n.t('Please enter a branch name.');
   }
   if (/\s/.test(input)) {
-    return vscode.l10n.t('ui.branchNameNoWhitespace');
+    return vscode.l10n.t('Whitespace is not allowed.');
   }
   if (/[~^:\\?*\[\]]/.test(input)) {
-    return vscode.l10n.t('ui.branchNameInvalidChars');
+    return vscode.l10n.t('Contains invalid characters (~ ^ : \\ ? * [ ]).');
   }
   if (input.endsWith('.') || input.endsWith('/')) {
-    return vscode.l10n.t('ui.branchNameInvalidEnding');
+    return vscode.l10n.t("A branch name cannot end with '.' or '/'.");
   }
   if (input.includes('..') || input.includes('//')) {
-    return vscode.l10n.t('ui.branchNameInvalidSequences');
+    return vscode.l10n.t("'..' and consecutive '/' are not allowed.");
   }
   return undefined;
 }
 
 export async function confirm(message: string) {
-  const yes = vscode.l10n.t('ui.confirm.yes');
+  const yes = vscode.l10n.t('Yes');
   const pick = await vscode.window.showWarningMessage(message, { modal: true }, yes);
   return pick === yes;
 }
@@ -133,7 +133,7 @@ export async function pickRepository(): Promise<RepoContext | undefined> {
 
   const chosen = await vscode.window.showQuickPick(
     okPicks.map((p) => ({ label: p.label, description: p.description, repoRoot: p.repoRoot })),
-    { title: vscode.l10n.t('ui.pickRepo.title') }
+    { title: vscode.l10n.t('Select a Git repository') }
   );
 
   if (!chosen) {

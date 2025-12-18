@@ -1,13 +1,13 @@
 {
-  "extension.displayName": "Git ブランチマネージャー",
-  "extension.description": "Git ブランチを管理します。",
+  "extension.displayName": "Git Branch Manager",
+  "extension.description": "VS Code 上で Git のブランチ操作をまとめて行うための拡張です（チェックアウト/作成/リネーム/削除/マージ/デッドブランチ検出）。",
 
-  "command.openManager.title": "ブランチ管理: 開く (Branch Manager)",
+  "command.openManager.title": "ブランチ管理: 開く",
 
   "config.title": "Git Branch Manager",
-  "config.baseBranch.description": "デッドブランチの基準ブランチ。'auto' で origin/HEAD を自動検出します。",
-  "config.protectedBranches.description": "削除/検出対象から除外する保護ブランチ。'release/*' のようなプレフィックス/簡易 glob 指定が可能です。",
-  "config.confirmBeforeDelete.description": "削除などの破壊的操作の前に確認ダイアログを表示します。",
-  "config.forceDeleteLocal.description": "ローカルブランチ削除を強制します (--force / -D)。",
-  "config.includeRemoteInDeadCleanup.description": "デッドブランチ一括削除時に、対応するリモートブランチ削除も試行します。"
+  "config.baseBranch.description": "デッドブランチ検出の基準ブランチ。「auto」の場合は origin/HEAD を優先し、無ければ main/master/develop を順に探索します。",
+  "config.protectedBranches.description": "保護ブランチ。削除/検出/リネーム/マージ元指定の対象外になります。* を使用した glob パターンに対応しています。",
+  "config.confirmBeforeDelete.description": "削除など破壊的操作前に確認ダイアログを表示します。",
+  "config.forceDeleteLocal.description": "ローカル削除を強制します (git branch -D)。",
+  "config.includeRemoteInDeadCleanup.description": "デッドブランチ一括削除時に、対応する追跡リモートがある場合はリモート削除も試行します。"
 }

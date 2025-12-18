@@ -47,7 +47,7 @@ async function getState(repoRoot: string): Promise<State> {
 export async function openManagerPanel(context: vscode.ExtensionContext, repo: RepoContext) {
   const panel = vscode.window.createWebviewPanel(
     'gitBranchManager',
-    vscode.l10n.t('panel.title'),
+    vscode.l10n.t('Branch Manager'),
     vscode.ViewColumn.Active,
     {
       enableScripts: true,
@@ -89,7 +89,7 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
 
           case 'create': {
             const name = await vscode.window.showInputBox({
-              prompt: vscode.l10n.t('panel.prompt.newBranchName'),
+              prompt: vscode.l10n.t('New branch name'),
               validateInput: simpleBranchNameValidator,
             });
             if (!name) {
@@ -97,7 +97,7 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
             }
 
             const base = await vscode.window.showInputBox({
-              prompt: vscode.l10n.t('panel.prompt.baseBranchOptional'),
+              prompt: vscode.l10n.t('Base branch (optional, e.g. main)'),
             });
 
             await createBranch(repo.repoRoot, name, base || undefined, true);
@@ -107,7 +107,7 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
 
           case 'rename': {
             const newName = await vscode.window.showInputBox({
-              prompt: vscode.l10n.t('panel.prompt.renameBranch', msg.oldName),
+              prompt: vscode.l10n.t('New branch name ({0} → ?)', msg.oldName),
               validateInput: simpleBranchNameValidator,
               value: msg.oldName,
             });
@@ -117,7 +117,7 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
 
             const cfg = getCfg();
             if (isProtectedBranch(msg.oldName, cfg.protected)) {
-              vscode.window.showWarningMessage(vscode.l10n.t('panel.warn.protectedCannotRename'));
+              vscode.window.showWarningMessage(vscode.l10n.t('Protected branches cannot be renamed.'));
               break;
             }
 
@@ -129,13 +129,13 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
           case 'deleteLocal': {
             const cfg = getCfg();
             if (isProtectedBranch(msg.name, cfg.protected)) {
-              vscode.window.showWarningMessage(vscode.l10n.t('panel.warn.protectedCannotDelete'));
+              vscode.window.showWarningMessage(vscode.l10n.t('Protected branches cannot be deleted.'));
               break;
             }
 
             const proceed =
               !cfg.confirmBeforeDelete ||
-              (await confirm(vscode.l10n.t('panel.confirm.deleteLocal', msg.name)));
+              (await confirm(vscode.l10n.t('Delete local branch {0}?', msg.name)));
             if (!proceed) {
               break;
             }
@@ -148,17 +148,23 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
           case 'mergeIntoCurrent': {
             const current = await getCurrentBranch(repo.repoRoot);
             if (current && msg.source === current) {
-              vscode.window.showInformationMessage(vscode.l10n.t('panel.info.mergeSelfInvalid'));
+              vscode.window.showInformationMessage(
+                vscode.l10n.t('Merging a branch into itself is not allowed.')
+              );
               break;
             }
 
             const cfg = getCfg();
             if (isProtectedBranch(msg.source, cfg.protected)) {
-              vscode.window.showWarningMessage(vscode.l10n.t('panel.warn.protectedCannotMergeSource'));
+              vscode.window.showWarningMessage(
+                vscode.l10n.t('Protected branches cannot be selected as the merge source.')
+              );
               break;
             }
 
-            const proceed = await confirm(vscode.l10n.t('panel.confirm.mergeIntoCurrent', msg.source));
+            const proceed = await confirm(
+              vscode.l10n.t('Merge {0} into the current branch?', msg.source)
+            );
             if (!proceed) {
               break;
             }
@@ -171,11 +177,15 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
           case 'deleteRemote': {
             const cfg = getCfg();
             if (isProtectedBranch(msg.name, cfg.protected)) {
-              vscode.window.showWarningMessage(vscode.l10n.t('panel.warn.protectedCannotDeleteRemote'));
+              vscode.window.showWarningMessage(
+                vscode.l10n.t('Protected branches cannot be deleted remotely.')
+              );
               break;
             }
 
-            const proceed = await confirm(vscode.l10n.t('panel.confirm.deleteRemote', msg.remote, msg.name));
+            const proceed = await confirm(
+              vscode.l10n.t('Delete remote branch {0}/{1}?', msg.remote, msg.name)
+            );
             if (!proceed) {
               break;
             }
@@ -189,7 +199,9 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
             const base = await resolveBaseBranch(repo.repoRoot);
             const dead = await detectDeadBranches(repo.repoRoot, base);
             if (dead.length === 0) {
-              vscode.window.showInformationMessage(vscode.l10n.t('panel.info.noDeadBranches', base));
+              vscode.window.showInformationMessage(
+                vscode.l10n.t('No dead branches found (base: {0}).', base)
+              );
               break;
             }
 
@@ -197,7 +209,7 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
               dead.map((d) => ({ label: d, picked: true })),
               {
                 canPickMany: true,
-                title: vscode.l10n.t('panel.pickDeadBranches.title', base),
+                title: vscode.l10n.t('Select dead branches to delete (base: {0})', base),
               }
             );
 
@@ -210,7 +222,7 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
 
             const proceed =
               !cfg.confirmBeforeDelete ||
-              (await confirm(vscode.l10n.t('panel.confirm.deleteDeadCount', names.length)));
+              (await confirm(vscode.l10n.t('Delete {0} selected local branches?', names.length)));
             if (!proceed) {
               break;
             }
@@ -259,7 +271,9 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
 export async function openManagerCommand(context: vscode.ExtensionContext) {
   const repo = await pickRepository();
   if (!repo) {
-    vscode.window.showWarningMessage(vscode.l10n.t('errors.noGitRepo'));
+    vscode.window.showWarningMessage(
+      vscode.l10n.t('No Git repository found. Open a folder or initialize Git.')
+    );
     return;
   }
 
@@ -267,7 +281,7 @@ export async function openManagerCommand(context: vscode.ExtensionContext) {
 }
 
 function openLogInTerminal(cwd: string, ref: string) {
-  const term = vscode.window.createTerminal({ cwd, name: vscode.l10n.t('terminal.gitLog.name') });
+  const term = vscode.window.createTerminal({ cwd, name: vscode.l10n.t('Git Log') });
   term.show();
   term.sendText(`git log --oneline --graph --decorate ${ref}`);
 }
@@ -305,34 +319,34 @@ type WebviewI18n = {
 
 function getWebviewI18n(): WebviewI18n {
   return {
-    errorFallback: vscode.l10n.t('webview.error.fallback'),
+    errorFallback: vscode.l10n.t('Error'),
 
-    refresh: vscode.l10n.t('webview.toolbar.refresh'),
-    create: vscode.l10n.t('webview.toolbar.create'),
-    detectDead: vscode.l10n.t('webview.toolbar.detectDead'),
+    refresh: vscode.l10n.t('Refresh'),
+    create: vscode.l10n.t('Create'),
+    detectDead: vscode.l10n.t('Detect Dead'),
 
-    localBranches: vscode.l10n.t('webview.section.local'),
-    remoteBranches: vscode.l10n.t('webview.section.remote'),
+    localBranches: vscode.l10n.t('Local Branches'),
+    remoteBranches: vscode.l10n.t('Remote Branches'),
 
-    localHeaderCurrent: vscode.l10n.t('webview.table.local.current'),
-    localHeaderName: vscode.l10n.t('webview.table.local.name'),
-    localHeaderUpstream: vscode.l10n.t('webview.table.local.upstream'),
-    localHeaderAhead: vscode.l10n.t('webview.table.local.ahead'),
-    localHeaderBehind: vscode.l10n.t('webview.table.local.behind'),
-    localHeaderActions: vscode.l10n.t('webview.table.local.actions'),
+    localHeaderCurrent: vscode.l10n.t('Current'),
+    localHeaderName: vscode.l10n.t('Name'),
+    localHeaderUpstream: vscode.l10n.t('Upstream'),
+    localHeaderAhead: vscode.l10n.t('Ahead'),
+    localHeaderBehind: vscode.l10n.t('Behind'),
+    localHeaderActions: vscode.l10n.t('Actions'),
 
-    remoteHeaderRemote: vscode.l10n.t('webview.table.remote.remote'),
-    remoteHeaderName: vscode.l10n.t('webview.table.remote.name'),
-    remoteHeaderActions: vscode.l10n.t('webview.table.remote.actions'),
+    remoteHeaderRemote: vscode.l10n.t('Remote'),
+    remoteHeaderName: vscode.l10n.t('Name'),
+    remoteHeaderActions: vscode.l10n.t('Actions'),
 
-    actionCheckout: vscode.l10n.t('webview.action.checkout'),
-    actionLog: vscode.l10n.t('webview.action.log'),
-    actionRename: vscode.l10n.t('webview.action.rename'),
-    actionDelete: vscode.l10n.t('webview.action.delete'),
-    actionMergeIntoCurrent: vscode.l10n.t('webview.action.mergeIntoCurrent'),
-    actionDeleteRemote: vscode.l10n.t('webview.action.deleteRemote'),
+    actionCheckout: vscode.l10n.t('Checkout'),
+    actionLog: vscode.l10n.t('Log'),
+    actionRename: vscode.l10n.t('Rename'),
+    actionDelete: vscode.l10n.t('Delete'),
+    actionMergeIntoCurrent: vscode.l10n.t('Merge into current'),
+    actionDeleteRemote: vscode.l10n.t('Delete Remote'),
 
-    badgeHead: vscode.l10n.t('webview.badge.head'),
+    badgeHead: vscode.l10n.t('HEAD'),
   };
 }
 

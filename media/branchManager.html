@@ -37,9 +37,10 @@ code { font-family: var(--vscode-editor-font-family); }
 
   <script nonce="{{NONCE}}">
     const vscode = acquireVsCodeApi();
-    // I18N is injected by the extension at runtime.
-    // Keep this line valid JS even before injection to avoid editor parse errors.
-    const I18N = JSON.parse(atob('{{I18N_B64}}'));
+
+    // Decode base64-encoded i18n data (injected at runtime)
+    // Note: atob() returns a binary string, so we need decodeURIComponent(escape()) to properly handle UTF-8
+    const I18N = JSON.parse(decodeURIComponent(escape(atob('{{I18N_B64}}'))));
 
     const $ = (id) => document.getElementById(id);
     const localEl = $('local');

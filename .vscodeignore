@@ -3,8 +3,9 @@
 out/**
 node_modules/**
 src/**
-# Include webview HTML
+# Include webview HTML and localization files
 !media/branchManager.html
+!l10n/**
 .gitignore
 .yarnrc
 webpack.config.js
