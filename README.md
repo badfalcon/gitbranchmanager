@@ -1,71 +1,88 @@
-# gitbranchmanager README
+# Git Branch Manager
 
-This is the README for your extension "gitbranchmanager". After writing up a brief description, we recommend including the following sections.
+VS Code上で Git のブランチ操作（チェックアウト/作成/リネーム/削除/マージ/デッドブランチ検出）をまとめて行うための拡張です。
+
+- コマンド: **ブランチ管理: 開く (Branch Manager)** (`gitbranchmanager.openManager`)
+- SCMビュー（Source Control）のタイトルバーからも起動できます
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+### Branch Manager Webview
+- **Local Branches / Remote Branches** を一覧表示
+- Local:
+  - Checkout
+  - Log（ターミナルで `git log --oneline --graph --decorate` を開く）
+  - Rename（保護ブランチは不可）
+  - Delete（保護ブランチは不可・設定で確認/force制御）
+  - Merge into current（現在ブランチへマージ。保護ブランチは不可）
+- Remote:
+  - Checkout（追跡ローカルが無ければ作成してcheckout）
+  - Log
+  - Delete Remote（保護ブランチは不可）
 
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+### Detect Dead（デッドブランチ検出）
+- ベースブランチ（設定 or 自動検出）に **merge済み** のローカルブランチを抽出
+- 一括削除（オプションで対応するリモート削除も試行）
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- Git が利用可能であること（`git` コマンドが実行できる）
+
+## Usage
+
+1. Gitリポジトリを含むフォルダをVS Codeで開く
+2. コマンドパレットで **ブランチ管理: 開く (Branch Manager)** を実行
+   - または SCM ビュー上部のメニューから実行
+3. Webview上のボタンで操作
 
 ## Extension Settings
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+`settings.json` 例：
 
-For example:
+```json
+{
+  "gitBranchManager.baseBranch": "auto",
+  "gitBranchManager.protectedBranches": ["main", "master", "develop", "release/*"],
+  "gitBranchManager.confirmBeforeDelete": true,
+  "gitBranchManager.forceDeleteLocal": false,
+  "gitBranchManager.includeRemoteInDeadCleanup": false
+}
+```
 
-This extension contributes the following settings:
+### `gitBranchManager.baseBranch`
+- デッドブランチ検出の基準ブランチ
+- `auto` の場合は `origin/HEAD` を優先して自動検出し、無ければ `main/master/develop` を順に探索します
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+### `gitBranchManager.protectedBranches`
+- 保護ブランチ
+- 保護ブランチは **削除/検出/リネーム/マージ元指定** の対象外になります
+- `release/*` のような簡易glob（`*`）に対応
+
+### `gitBranchManager.confirmBeforeDelete`
+- 削除など破壊的操作前に確認ダイアログを表示
+
+### `gitBranchManager.forceDeleteLocal`
+- ローカル削除を強制（`git branch -D`）する
+
+### `gitBranchManager.includeRemoteInDeadCleanup`
+- デッドブランチ一括削除時に、対応する追跡リモートがある場合はリモート削除も試行
+
+## Implementation Notes
+
+- WebviewのHTMLは `media/branchManager.html` に置いてあり、起動時にCSP/nonceを差し込んで読み込みます。
+- TypeScript側のメインロジックは `src/app.ts` に集約しています（小さく保つ方針）。
 
 ## Known Issues
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+- テスト実行ログに `Error mutex already exists` が出る場合がありますが、`vscode-test` 自体は Exit code 0 で完了します（環境上の既存VS Codeプロセス競合の可能性）。
 
-## Release Notes
+## Development
 
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
+```bash
+npm install
+npm test
+```
 
 ---
 
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+If you find a bug or have a feature request, please open an issue.
