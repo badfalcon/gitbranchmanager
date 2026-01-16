@@ -2,11 +2,29 @@
   "name": "gitbranchmanager",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.0.1",
+  "version": "1.0.0",
+  "publisher": "badfalcon",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/badfalcon/gitbranchmanager.git"
+  },
+  "homepage": "https://github.com/badfalcon/gitbranchmanager#readme",
+  "bugs": {
+    "url": "https://github.com/badfalcon/gitbranchmanager/issues"
+  },
+  "keywords": [
+    "git",
+    "branch",
+    "manager",
+    "scm",
+    "source control"
+  ],
   "engines": {
     "vscode": "^1.106.1"
   },
   "categories": [
+    "SCM Providers",
     "Other"
   ],
   "activationEvents": [

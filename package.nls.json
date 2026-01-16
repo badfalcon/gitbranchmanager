@@ -1,5 +1,5 @@
 {
-  "extension.displayName": "Git Branch Manager",
+  "extension.displayName": "Simple Branch Manager",
   "extension.description": "A VS Code extension for managing Git branches from a single UI (checkout/create/rename/delete/merge/detect dead branches).",
 
   "command.openManager.title": "Git Branch Manager: Open",

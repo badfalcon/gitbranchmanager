@@ -1,5 +1,5 @@
 {
-  "extension.displayName": "Git Branch Manager",
+  "extension.displayName": "Simple Branch Manager",
   "extension.description": "VS Code 上で Git のブランチ操作をまとめて行うための拡張です（チェックアウト/作成/リネーム/削除/マージ/デッドブランチ検出）。",
 
   "command.openManager.title": "ブランチ管理: 開く",
