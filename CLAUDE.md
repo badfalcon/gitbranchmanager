@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Git Branch Cleaner is a VS Code extension focused on cleaning up Git branches. It provides detection and deletion of dead/stale/gone branches, along with full branch management capabilities (checkout, create, rename, delete, merge) from a single webview panel.
+Git Branch Cleaner is a VS Code extension focused on cleaning up Git branches. It provides detection and deletion of dead/stale/gone branches for both local and remote, along with full branch management capabilities (checkout, create, rename, delete, merge) from a single webview panel.
 
 ## Build, Test, and Develop Commands
 
@@ -45,13 +45,19 @@ Main TypeScript module containing:
 - **Git Operations**: Pure functions that wrap `runGit()` calls:
   - **Queries**: `listLocalBranches()`, `listRemoteBranches()`, `getCurrentBranch()`, `resolveBaseBranch()`
   - **Actions**: `checkoutBranch()`, `createBranch()`, `renameBranch()`, `deleteLocalBranch()`, `mergeIntoCurrent()`, `deleteRemoteBranch()`
-  - **Cleanup Detection**:
+  - **Local Cleanup Detection**:
     - `detectDeadBranches()` - finds merged branches
     - `detectStaleBranches()` - finds branches with old commits
     - `detectGoneBranches()` - finds branches with deleted upstream
-    - `getBranchLastCommitDates()` - gets commit age info
-    - `listLocalBranchesWithStatus()` - combined status for all branches
+    - `getBranchLastCommitDates()` - gets commit age info for local branches
+    - `listLocalBranchesWithStatus()` - combined status for all local branches
+  - **Remote Cleanup Detection**:
+    - `detectMergedRemoteBranches()` - finds merged remote branches
+    - `getRemoteBranchLastCommitDates()` - gets commit age info for remote branches
+    - `listRemoteBranchesWithStatus()` - combined status for all remote branches
+  - **Utilities**:
     - `fetchWithPrune()` - updates remote tracking refs
+    - `getUpstreamMap()` - maps local branches to their upstream tracking refs
 - **Helpers**:
   - `isProtectedBranch()` - supports exact match, prefix (`*`), and glob patterns
   - `parseTrackShort()` - parses git ahead/behind counts
@@ -66,15 +72,17 @@ Main TypeScript module containing:
 ### **Webview Panel** ([src/webview/panel.ts](src/webview/panel.ts))
 - `openManagerPanel()` - creates webview, injects CSP/nonce, handles message dispatch
 - Message handler for user actions (checkout, create, rename, delete, merge, cleanup)
-- `getState()` - fetches current branch list with cleanup status indicators
+- `getState()` - fetches current branch list with cleanup status indicators for both local and remote
 - Auto-fetches with prune when `autoFetchPrune` is enabled
 - Embeds webview i18n strings as base64 JSON
 - Loads HTML from [media/branchManager.html](media/branchManager.html)
 
 ### **Webview UI** ([media/branchManager.html](media/branchManager.html))
 - Static HTML with inline CSS/JavaScript
-- Tables for local and remote branches with status badges
-- Cleanup toolbar with Merged/Stale/Gone/Cleanup All buttons
+- Tables for local and remote branches with status badges (merged/stale/gone)
+- **Local cleanup toolbar**: Merged/Stale/Gone/Cleanup All buttons
+- **Remote cleanup toolbar**: Merged/Stale/Cleanup All buttons
+- **Select mode**: Toggle to show checkboxes for manual multi-select deletion
 - Preview modal for bulk deletion with checkbox selection
 - i18n strings injected at runtime as base64-encoded JSON
 
@@ -89,7 +97,8 @@ Main TypeScript module containing:
 - Blocks: delete, rename, merge (as source), delete remote, cleanup operations
 
 ### Branch Cleanup Detection
-Three types of cleanup candidates:
+
+**Local branches** - Three types of cleanup candidates:
 
 1. **Merged (Dead)**: Branches fully merged into base branch
    - Base branch resolved via `resolveBaseBranch()`:
@@ -106,6 +115,34 @@ Three types of cleanup candidates:
 3. **Gone**: Local tracking branches whose upstream was deleted
    - Detected via `git branch -vv` looking for `[origin/xxx: gone]`
    - Optional auto `git fetch --prune` via `autoFetchPrune` setting
+
+**Remote branches** - Two types of cleanup candidates:
+
+1. **Merged**: Remote branches fully merged into base branch
+   - Detected via `git branch -r --merged BASE`
+
+2. **Stale**: Remote branches with no commits for N days
+   - Uses `git for-each-ref` on `refs/remotes`
+
+### Deletion Behavior
+
+**Local branch deletion**:
+- Uses `git branch -d` by default (safe delete)
+- If deletion fails (unmerged branch), prompts: "X branches are not fully merged. Force delete them?"
+- If confirmed, retries with `git branch -D` (force delete)
+- Reports any failures to user
+
+**Remote branch deletion** (when "Also delete corresponding remote branches" is checked):
+- For **tracked branches**: deletes directly using upstream ref
+- For **untracked branches**: prompts "Also delete X remote branches with same name (not tracked)?"
+- If confirmed, attempts to delete `origin/<branch-name>`
+
+### Select Mode
+- Toggle "Select" button to enter select mode
+- Checkboxes appear on all branch rows (disabled for current/protected branches)
+- Select branches from both local and remote tables simultaneously
+- Counter shows "X selected"
+- Click "Delete Selected" to bulk delete all selected branches
 
 ### Configuration Keys
 All settings are under `gitBranchCleaner.*`:
@@ -132,7 +169,9 @@ Two-way message flow between extension and webview:
 - `{ type: 'deleteLocal'; name: string }` - delete local branch
 - `{ type: 'mergeIntoCurrent'; source: string }` - merge into current
 - `{ type: 'deleteRemote'; remote: string; name: string }` - delete remote branch
-- `{ type: 'executeCleanup'; branches: string[]; includeRemote: boolean }` - bulk delete selected branches
+- `{ type: 'executeCleanup'; branches: string[]; includeRemote: boolean }` - bulk delete local branches (with optional remote)
+- `{ type: 'executeRemoteCleanup'; branches: string[] }` - bulk delete remote branches
+- `{ type: 'deleteSelectedBranches'; localBranches: string[]; remoteBranches: string[] }` - delete selected branches from select mode
 
 **Extension → Webview (State)**:
 - `{ type: 'state'; state: { locals: BranchRow[]; remotes: BranchRow[]; current?: string; repoRoot: string; showStatusBadges?: boolean } }` - branch list with status
@@ -166,7 +205,7 @@ Run tests with `npm test` (auto-compiles and lints first).
 
 - **Git requirement**: The extension assumes `git` command is available on PATH
 - **CSP enforcement**: Webview uses strict CSP with nonce injection for security
-- **Error handling**: Git errors include command args and cwd for debugging
+- **Error handling**: Git errors include command args and cwd for debugging; failed branch deletions are reported to user
 - **Repository detection**: Multi-folder workspace support with filtering for actual Git repos
 - **Checkout from remote**: If checking out `origin/feature`, automatically creates local tracking branch `feature`
 - **Mutex warnings in tests**: `vscode-test` may report "Error mutex already exists"; this is expected due to VS Code process contention and doesn't affect exit code

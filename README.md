@@ -1,16 +1,16 @@
-# Git Branch Manager
+# Git Branch Cleaner
 
 ## English
 
-A VS Code extension for managing Git branches from a single UI (checkout/create/rename/delete/merge/detect dead branches).
+A VS Code extension for cleaning up Git branches (detect and delete dead/stale/gone branches, with full branch management).
 
-- Command: **Git Branch Manager: Open** (`gitbranchmanager.openManager`)
+- Command: **Git Branch Cleaner: Open** (`gitbranchcleaner.openCleaner`)
 - You can also launch it from the SCM (Source Control) view title bar.
 
 ### Features
 
-#### Branch Manager Webview
-- Shows **Local Branches / Remote Branches**
+#### Branch Cleaner Webview
+- Shows **Local Branches / Remote Branches** with status badges (merged/stale/gone)
 - Local:
   - Checkout
   - Log (opens `git log --oneline --graph --decorate` in a terminal)
@@ -22,16 +22,27 @@ A VS Code extension for managing Git branches from a single UI (checkout/create/
   - Log
   - Delete Remote (not allowed for protected branches)
 
-#### Detect Dead
-- Finds local branches that are already merged into the base branch (from settings or auto-detected)
-- Bulk delete (optionally also tries to delete corresponding remote branches)
+#### Cleanup Toolbar
+- **Merged**: Find and delete branches already merged into the base branch
+- **Stale**: Find and delete branches with no commits for N days (configurable)
+- **Gone**: Find and delete branches whose upstream was deleted
+- **Cleanup All**: Combine all three detections for bulk cleanup
+
+#### Select Mode
+- Toggle select mode to manually pick branches for deletion
+- Works for both local and remote branches
+- Shows selected count and allows bulk deletion
+
+#### Force Delete Confirmation
+- When deleting unmerged branches (e.g., stale), shows confirmation dialog to force delete
+- Also confirms when deleting remote branches with the same name as local (untracked)
 
 ### Requirements
 - Git must be available (`git` command executable)
 
 ### Usage
 1. Open a folder containing a Git repository in VS Code
-2. Run **Git Branch Manager: Open** from the Command Palette
+2. Run **Git Branch Cleaner: Open** from the Command Palette
    - Or run it from the SCM view menu
 3. Use the buttons in the webview
 
@@ -41,19 +52,25 @@ Example `settings.json`:
 
 ```json
 {
-  "gitBranchManager.baseBranch": "auto",
-  "gitBranchManager.protectedBranches": ["main", "master", "develop", "release/*"],
-  "gitBranchManager.confirmBeforeDelete": true,
-  "gitBranchManager.forceDeleteLocal": false,
-  "gitBranchManager.includeRemoteInDeadCleanup": false
+  "gitBranchCleaner.baseBranch": "auto",
+  "gitBranchCleaner.protectedBranches": ["main", "master", "develop", "release/*"],
+  "gitBranchCleaner.confirmBeforeDelete": true,
+  "gitBranchCleaner.forceDeleteLocal": false,
+  "gitBranchCleaner.includeRemoteInDeadCleanup": false,
+  "gitBranchCleaner.staleDays": 30,
+  "gitBranchCleaner.autoFetchPrune": false,
+  "gitBranchCleaner.showStatusBadges": true
 }
 ```
 
-- `gitBranchManager.baseBranch`: Base branch used for dead-branch detection. If `auto`, it prefers `origin/HEAD`, then tries `main/master/develop`.
-- `gitBranchManager.protectedBranches`: Protected branches excluded from delete/detect/rename/merge-source actions. Simple glob (`*`) is supported.
-- `gitBranchManager.confirmBeforeDelete`: Show confirmation dialog before destructive actions.
-- `gitBranchManager.forceDeleteLocal`: Force delete local branches (`git branch -D`).
-- `gitBranchManager.includeRemoteInDeadCleanup`: When bulk deleting dead branches, also try to delete corresponding remote branches.
+- `gitBranchCleaner.baseBranch`: Base branch used for dead-branch detection. If `auto`, it prefers `origin/HEAD`, then tries `main/master/develop`.
+- `gitBranchCleaner.protectedBranches`: Protected branches excluded from delete/detect/rename/merge-source actions. Simple glob (`*`) is supported.
+- `gitBranchCleaner.confirmBeforeDelete`: Show confirmation dialog before destructive actions.
+- `gitBranchCleaner.forceDeleteLocal`: Force delete local branches (`git branch -D`).
+- `gitBranchCleaner.includeRemoteInDeadCleanup`: When bulk deleting dead branches, also try to delete corresponding remote branches.
+- `gitBranchCleaner.staleDays`: Number of days since last commit to consider a branch as stale (default: 30).
+- `gitBranchCleaner.autoFetchPrune`: Automatically run `git fetch --prune` before detecting gone branches.
+- `gitBranchCleaner.showStatusBadges`: Show status badges (merged/stale/gone) in the branch list.
 
 ### Implementation Notes
 - The webview HTML is at `media/branchManager.html`. CSP/nonce are injected at runtime.
@@ -73,15 +90,15 @@ npm test
 
 ## 日本語
 
-VS Code 上で Git のブランチ操作（チェックアウト/作成/リネーム/削除/マージ/デッドブランチ検出）をまとめて行うための拡張です。
+Git ブランチの整理に特化した VS Code 拡張です（デッド/古い/削除済みリモートのブランチ検出・削除、その他ブランチ管理機能）。
 
-- コマンド: **ブランチ管理: 開く (Branch Manager)** (`gitbranchmanager.openManager`)
+- コマンド: **ブランチクリーナー: 開く** (`gitbranchcleaner.openCleaner`)
 - SCMビュー（Source Control）のタイトルバーからも起動できます
 
 ### Features
 
-#### Branch Manager Webview
-- **Local Branches / Remote Branches** を一覧表示
+#### Branch Cleaner Webview
+- **Local Branches / Remote Branches** をステータスバッジ（マージ済み/古い/削除済み）付きで一覧表示
 - Local:
   - Checkout
   - Log（ターミナルで `git log --oneline --graph --decorate` を開く）
@@ -93,16 +110,27 @@ VS Code 上で Git のブランチ操作（チェックアウト/作成/リネ�
   - Log
   - Delete Remote（保護ブランチは不可）
 
-#### Detect Dead（デッドブランチ検出）
-- ベースブランチ（設定 or 自動検出）に **merge済み** のローカルブランチを抽出
-- 一括削除（オプションで対応するリモート削除も試行）
+#### 整理ツールバー
+- **Merged**: ベースブランチにマージ済みのブランチを検出・削除
+- **Stale**: N日間コミットがないブランチを検出・削除（日数は設定可能）
+- **Gone**: 上流が削除されたブランチを検出・削除
+- **Cleanup All**: 3種類すべての検出をまとめて実行
+
+#### 選択モード
+- 選択モードをオンにして、削除するブランチを手動で選択
+- ローカル・リモート両方で使用可能
+- 選択件数を表示し、一括削除が可能
+
+#### 強制削除確認
+- マージされていないブランチ（例: 古いブランチ）を削除する際、強制削除の確認ダイアログを表示
+- 同名のリモートブランチ（未追跡）を削除する際も確認を表示
 
 ### Requirements
 - Git が利用可能であること（`git` コマンドが実行できる）
 
 ### Usage
 1. Gitリポジトリを含むフォルダをVS Codeで開く
-2. コマンドパレットで **ブランチ管理: 開く (Branch Manager)** を実行
+2. コマンドパレットで **ブランチクリーナー: 開く** を実行
    - または SCM ビュー上部のメニューから実行
 3. Webview上のボタンで操作
 
@@ -112,23 +140,29 @@ VS Code 上で Git のブランチ操作（チェックアウト/作成/リネ�
 
 ```json
 {
-  "gitBranchManager.baseBranch": "auto",
-  "gitBranchManager.protectedBranches": ["main", "master", "develop", "release/*"],
-  "gitBranchManager.confirmBeforeDelete": true,
-  "gitBranchManager.forceDeleteLocal": false,
-  "gitBranchManager.includeRemoteInDeadCleanup": false
+  "gitBranchCleaner.baseBranch": "auto",
+  "gitBranchCleaner.protectedBranches": ["main", "master", "develop", "release/*"],
+  "gitBranchCleaner.confirmBeforeDelete": true,
+  "gitBranchCleaner.forceDeleteLocal": false,
+  "gitBranchCleaner.includeRemoteInDeadCleanup": false,
+  "gitBranchCleaner.staleDays": 30,
+  "gitBranchCleaner.autoFetchPrune": false,
+  "gitBranchCleaner.showStatusBadges": true
 }
 ```
 
-- `gitBranchManager.baseBranch`: デッドブランチ検出の基準ブランチ。`auto` の場合は `origin/HEAD` を優先し、無ければ `main/master/develop` を順に探索します。
-- `gitBranchManager.protectedBranches`: 保護ブランチ。**削除/検出/リネーム/マージ元指定** の対象外になります。`release/*` のような簡易glob（`*`）に対応。
-- `gitBranchManager.confirmBeforeDelete`: 削除など破壊的操作前に確認ダイアログを表示。
-- `gitBranchManager.forceDeleteLocal`: ローカル削除を強制（`git branch -D`）。
-- `gitBranchManager.includeRemoteInDeadCleanup`: デッドブランチ一括削除時に、対応する追跡リモートがある場合はリモート削除も試行。
+- `gitBranchCleaner.baseBranch`: デッドブランチ検出の基準ブランチ。`auto` の場合は `origin/HEAD` を優先し、無ければ `main/master/develop` を順に探索します。
+- `gitBranchCleaner.protectedBranches`: 保護ブランチ。**削除/検出/リネーム/マージ元指定** の対象外になります。`release/*` のような簡易glob（`*`）に対応。
+- `gitBranchCleaner.confirmBeforeDelete`: 削除など破壊的操作前に確認ダイアログを表示。
+- `gitBranchCleaner.forceDeleteLocal`: ローカル削除を強制（`git branch -D`）。
+- `gitBranchCleaner.includeRemoteInDeadCleanup`: デッドブランチ一括削除時に、対応する追跡リモートがある場合はリモート削除も試行。
+- `gitBranchCleaner.staleDays`: 最終コミットから何日経過したブランチを「古い」と見なすか（デフォルト: 30）。
+- `gitBranchCleaner.autoFetchPrune`: Gone ブランチ検出前に自動で `git fetch --prune` を実行。
+- `gitBranchCleaner.showStatusBadges`: ブランチ一覧にステータスバッジ（マージ済み/古い/削除済み）を表示。
 
 ### Implementation Notes
 - WebviewのHTMLは `media/branchManager.html` に置いてあり、起動時にCSP/nonceを差し込んで読み込みます。
-- TypeScript側のメインロジックは `src/app.ts` に集約しています（小さく保つ方針）。
+- TypeScript側のメインロジックは `src/app.ts` に集約しています。
 
 ### Known Issues
 - テスト実行ログに `Error mutex already exists` が出る場合がありますが、`vscode-test` 自体は Exit code 0 で完了します（環境上の既存VS Codeプロセス競合の可能性）。
