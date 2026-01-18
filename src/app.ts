@@ -20,11 +20,25 @@ export type BranchRow = {
   ahead?: number;
   behind?: number;
   protected?: boolean;
+
+  // Cleanup status indicators
+  /** Branch is merged into base branch */
+  isMerged?: boolean;
+  /** Last commit older than staleDays threshold */
+  isStale?: boolean;
+  /** Upstream no longer exists (shows [gone]) */
+  isGone?: boolean;
+  /** ISO date string of last commit */
+  lastCommitDate?: string;
+  /** Calculated age in days for UI display */
+  lastCommitAgeInDays?: number;
 };
 
 export type RepoContext = {
   repoRoot: string;
 };
+
+export type CleanupFilter = 'merged' | 'stale' | 'gone' | 'all';
 
 export type WebviewMessage =
   | { type: 'ready' }
@@ -36,7 +50,14 @@ export type WebviewMessage =
   | { type: 'deleteLocal'; name: string }
   | { type: 'mergeIntoCurrent'; source: string }
   | { type: 'deleteRemote'; remote: string; name: string }
-  | { type: 'detectDead' };
+  | { type: 'detectDead' }
+  // Cleanup preview messages
+  | { type: 'showCleanupPreview'; filter: CleanupFilter }
+  | { type: 'executeCleanup'; branches: string[]; includeRemote: boolean }
+  | { type: 'executeRemoteCleanup'; branches: string[] }
+  | { type: 'cancelCleanup' }
+  // Select mode
+  | { type: 'deleteSelectedBranches'; localBranches: string[]; remoteBranches: string[] };
 
 // =====================
 // Config
@@ -48,16 +69,24 @@ export type ExtensionConfig = {
   confirmBeforeDelete: boolean;
   forceDeleteLocal: boolean;
   includeRemoteInDeadCleanup: boolean;
+  // New cleanup settings
+  staleDays: number;
+  autoFetchPrune: boolean;
+  showStatusBadges: boolean;
 };
 
 export function getCfg(): ExtensionConfig {
-  const cfg = vscode.workspace.getConfiguration('gitBranchManager');
+  const cfg = vscode.workspace.getConfiguration('gitBranchCleaner');
   return {
     baseBranch: cfg.get<string>('baseBranch', 'auto'),
     protected: cfg.get<string[]>('protectedBranches', ['main', 'master', 'develop']),
     confirmBeforeDelete: cfg.get<boolean>('confirmBeforeDelete', true),
     forceDeleteLocal: cfg.get<boolean>('forceDeleteLocal', false),
     includeRemoteInDeadCleanup: cfg.get<boolean>('includeRemoteInDeadCleanup', false),
+    // New cleanup settings
+    staleDays: cfg.get<number>('staleDays', 30),
+    autoFetchPrune: cfg.get<boolean>('autoFetchPrune', false),
+    showStatusBadges: cfg.get<boolean>('showStatusBadges', true),
   };
 }
 
@@ -440,4 +469,202 @@ export async function detectDeadBranches(cwd: string, base: string): Promise<str
 export async function getUpstreamMap(cwd: string): Promise<Map<string, string>> {
   const locals = await listLocalBranches(cwd);
   return new Map(locals.flatMap((l) => (l.upstream ? [[l.short, l.upstream]] : [])));
+}
+
+// =====================
+// New Cleanup Detection Functions
+// =====================
+
+/**
+ * Get last commit date for each local branch.
+ * Returns Map of branch name -> { date: ISO string, ageInDays: number }
+ */
+export async function getBranchLastCommitDates(
+  cwd: string
+): Promise<Map<string, { date: string; ageInDays: number }>> {
+  const fmt = '%(refname:short)\t%(committerdate:iso-strict)';
+  const { stdout } = await runGit(cwd, ['for-each-ref', '--format', fmt, 'refs/heads']);
+
+  const now = Date.now();
+  const result = new Map<string, { date: string; ageInDays: number }>();
+
+  for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
+    const [name, dateStr] = line.split('\t');
+    if (name && dateStr) {
+      const commitDate = new Date(dateStr);
+      const ageInDays = Math.floor((now - commitDate.getTime()) / (1000 * 60 * 60 * 24));
+      result.set(name, { date: dateStr, ageInDays });
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Detect stale branches (last commit older than staleDays threshold).
+ */
+export async function detectStaleBranches(cwd: string, staleDays: number): Promise<string[]> {
+  const dates = await getBranchLastCommitDates(cwd);
+  const current = await getCurrentBranch(cwd);
+  const cfg = getCfg();
+
+  const stale: string[] = [];
+  for (const [name, { ageInDays }] of dates) {
+    if (ageInDays >= staleDays && name !== current && !isProtectedBranch(name, cfg.protected)) {
+      stale.push(name);
+    }
+  }
+
+  return stale;
+}
+
+/**
+ * Detect gone branches (local tracking branches whose upstream no longer exists).
+ * Parses `git branch -vv` output looking for [origin/xxx: gone] pattern.
+ */
+export async function detectGoneBranches(cwd: string): Promise<string[]> {
+  const { stdout } = await runGit(cwd, ['branch', '-vv']);
+  const current = await getCurrentBranch(cwd);
+  const cfg = getCfg();
+
+  const gone: string[] = [];
+  // Match patterns like: "  branch-name abc1234 [origin/branch-name: gone] commit message"
+  const goneRegex = /^\*?\s+(\S+)\s+\S+\s+\[[^\]]+:\s*gone\]/;
+
+  for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
+    const match = line.match(goneRegex);
+    if (match) {
+      const name = match[1];
+      if (name !== current && !isProtectedBranch(name, cfg.protected)) {
+        gone.push(name);
+      }
+    }
+  }
+
+  return gone;
+}
+
+/**
+ * Get Set of merged branch names (for efficient lookup).
+ */
+export async function getMergedBranchSet(cwd: string, base: string): Promise<Set<string>> {
+  const dead = await detectDeadBranches(cwd, base);
+  return new Set(dead);
+}
+
+/**
+ * Get Set of gone branch names (for efficient lookup).
+ */
+export async function getGoneBranchSet(cwd: string): Promise<Set<string>> {
+  const gone = await detectGoneBranches(cwd);
+  return new Set(gone);
+}
+
+/**
+ * Fetch with prune to update remote tracking refs.
+ */
+export async function fetchWithPrune(cwd: string, remote = 'origin'): Promise<void> {
+  await runGit(cwd, ['fetch', remote, '--prune']);
+}
+
+/**
+ * List local branches with all cleanup status indicators populated.
+ */
+export async function listLocalBranchesWithStatus(
+  cwd: string,
+  baseBranch: string,
+  staleDays: number
+): Promise<BranchRow[]> {
+  const [branches, mergedSet, datesMap, goneSet] = await Promise.all([
+    listLocalBranches(cwd),
+    getMergedBranchSet(cwd, baseBranch),
+    getBranchLastCommitDates(cwd),
+    getGoneBranchSet(cwd),
+  ]);
+
+  for (const b of branches) {
+    b.isMerged = mergedSet.has(b.short);
+    b.isGone = goneSet.has(b.short);
+
+    const dateInfo = datesMap.get(b.short);
+    if (dateInfo) {
+      b.lastCommitDate = dateInfo.date;
+      b.lastCommitAgeInDays = dateInfo.ageInDays;
+      b.isStale = dateInfo.ageInDays >= staleDays;
+    }
+  }
+
+  return branches;
+}
+
+/**
+ * Get last commit date for each remote branch.
+ * Returns Map of short name (e.g., "origin/feature") -> { date: ISO string, ageInDays: number }
+ */
+export async function getRemoteBranchLastCommitDates(
+  cwd: string
+): Promise<Map<string, { date: string; ageInDays: number }>> {
+  const fmt = '%(refname:short)\t%(committerdate:iso-strict)';
+  const { stdout } = await runGit(cwd, ['for-each-ref', '--format', fmt, 'refs/remotes']);
+
+  const now = Date.now();
+  const result = new Map<string, { date: string; ageInDays: number }>();
+
+  for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
+    const [name, dateStr] = line.split('\t');
+    // Skip HEAD pointers
+    if (name && dateStr && !name.endsWith('/HEAD')) {
+      const commitDate = new Date(dateStr);
+      const ageInDays = Math.floor((now - commitDate.getTime()) / (1000 * 60 * 60 * 24));
+      result.set(name, { date: dateStr, ageInDays });
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Detect remote branches merged into base branch.
+ */
+export async function detectMergedRemoteBranches(cwd: string, base: string): Promise<Set<string>> {
+  const { stdout } = await runGit(cwd, ['branch', '-r', '--merged', base]);
+
+  const merged = new Set<string>();
+  for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
+    const name = line.trim();
+    // Skip HEAD pointers and the base branch itself
+    if (name && !name.endsWith('/HEAD') && name !== base) {
+      merged.add(name);
+    }
+  }
+
+  return merged;
+}
+
+/**
+ * List remote branches with status indicators (merged/stale).
+ */
+export async function listRemoteBranchesWithStatus(
+  cwd: string,
+  baseBranch: string,
+  staleDays: number
+): Promise<BranchRow[]> {
+  const [branches, mergedSet, datesMap] = await Promise.all([
+    listRemoteBranches(cwd),
+    detectMergedRemoteBranches(cwd, baseBranch),
+    getRemoteBranchLastCommitDates(cwd),
+  ]);
+
+  for (const b of branches) {
+    b.isMerged = mergedSet.has(b.short);
+
+    const dateInfo = datesMap.get(b.short);
+    if (dateInfo) {
+      b.lastCommitDate = dateInfo.date;
+      b.lastCommitAgeInDays = dateInfo.ageInDays;
+      b.isStale = dateInfo.ageInDays >= staleDays;
+    }
+  }
+
+  return branches;
 }

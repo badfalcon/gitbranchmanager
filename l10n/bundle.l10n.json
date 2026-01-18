@@ -1,17 +1,20 @@
 {
-  "extension.displayName": "Git Branch Manager",
-  "extension.description": "A VS Code extension for managing Git branches from a single UI (checkout/create/rename/delete/merge/detect dead branches).",
+  "extension.displayName": "Git Branch Cleaner",
+  "extension.description": "A VS Code extension for cleaning up Git branches (detect and delete dead/stale/gone branches, with full branch management).",
 
-  "command.openManager.title": "Git Branch Manager: Open",
+  "command.openCleaner.title": "Git Branch Cleaner: Open",
 
-  "config.title": "Git Branch Manager",
+  "config.title": "Git Branch Cleaner",
   "config.baseBranch.description": "Base branch used for dead-branch detection. If 'auto', prefers origin/HEAD, then tries main/master/develop.",
   "config.protectedBranches.description": "Protected branches excluded from delete/detect/rename/merge-source actions. Supports glob patterns with *.",
   "config.confirmBeforeDelete.description": "Show confirmation dialog before destructive actions.",
   "config.forceDeleteLocal.description": "Force delete local branches (git branch -D).",
   "config.includeRemoteInDeadCleanup.description": "When bulk deleting dead branches, also try to delete corresponding remote branches.",
+  "config.staleDays.description": "Number of days since last commit to consider a branch as stale.",
+  "config.autoFetchPrune.description": "Automatically run 'git fetch --prune' before detecting gone branches.",
+  "config.showStatusBadges.description": "Show status badges (merged/stale/gone) in the branch list.",
 
-  "Git Branch Manager activated": "Git Branch Manager activated",
+  "Git Branch Cleaner activated": "Git Branch Cleaner activated",
   "No Git repository found. Open a folder or initialize Git.": "No Git repository found. Open a folder or initialize Git.",
 
   "Please enter a branch name.": "Please enter a branch name.",
@@ -23,7 +26,7 @@
   "Yes": "Yes",
   "Select a Git repository": "Select a Git repository",
 
-  "Branch Manager": "Branch Manager",
+  "Branch Cleaner": "Branch Cleaner",
   "Git Log": "Git Log",
 
   "New branch name": "New branch name",
@@ -55,9 +58,11 @@
 
   "Current": "Current",
   "Name": "Name",
+  "Status": "Status",
   "Upstream": "Upstream",
   "Ahead": "Ahead",
   "Behind": "Behind",
+  "Last Commit": "Last Commit",
   "Actions": "Actions",
 
   "Remote": "Remote",
@@ -69,5 +74,35 @@
   "Merge into current": "Merge into current",
   "Delete Remote": "Delete Remote",
 
-  "HEAD": "HEAD"
+  "HEAD": "HEAD",
+
+  "merged": "merged",
+  "stale": "stale",
+  "gone": "gone",
+
+  "Cleanup:": "Cleanup:",
+  "Merged": "Merged",
+  "Stale": "Stale",
+  "Gone": "Gone",
+  "Cleanup All": "Cleanup All",
+
+  "Cleanup Preview": "Cleanup Preview",
+  "Also delete corresponding remote branches": "Also delete corresponding remote branches",
+  "Cancel": "Cancel",
+  "Delete Selected": "Delete Selected",
+  "Select All": "Select All",
+  "Reasons": "Reasons",
+  "No cleanup candidates found.": "No cleanup candidates found.",
+
+  "{0}d ago": "{0}d ago",
+
+  "Local: {0}": "Local: {0}",
+  "Remote: {0}": "Remote: {0}",
+  "Failed to delete some branches: {0}": "Failed to delete some branches: {0}",
+  "{0} branches are not fully merged. Force delete them?": "{0} branches are not fully merged. Force delete them?",
+  "Delete {0} selected remote branches?": "Delete {0} selected remote branches?",
+  "Delete {0} selected branches?": "Delete {0} selected branches?",
+  "Select": "Select",
+  "{0} selected": "{0} selected",
+  "Also delete {0} remote branches with same name (not tracked)?": "Also delete {0} remote branches with same name (not tracked)?"
 }

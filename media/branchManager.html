@@ -5,24 +5,64 @@
 <meta charset="UTF-8" />
 <style>
 body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); }
-.toolbar { margin: 8px 0; display: flex; gap: 8px; align-items: center; }
+.toolbar { margin: 8px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cleanup-toolbar { margin: 8px 0; display: flex; gap: 8px; align-items: center; padding: 8px; background: var(--vscode-sideBar-background); border-radius: 4px; }
+.cleanup-toolbar .toolbar-label { font-weight: bold; font-size: 12px; }
 .table { width: 100%; border-collapse: collapse; margin-top: 8px; }
 .table th, .table td { border-bottom: 1px solid var(--vscode-editorGroup-border); padding: 6px 8px; font-size: 12px; text-align: left; }
-.badge { padding: 1px 6px; border-radius: 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
-.btn { padding: 2px 8px; border: 1px solid var(--vscode-button-border, transparent); background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); cursor: pointer; border-radius: 4px; }
+.badge { padding: 1px 6px; border-radius: 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); font-size: 10px; margin-right: 4px; display: inline-block; }
+.badge-merged { background: var(--vscode-testing-iconPassed, #4caf50); color: white; }
+.badge-stale { background: var(--vscode-editorWarning-foreground, #ff9800); color: white; }
+.badge-gone { background: var(--vscode-errorForeground, #f44336); color: white; }
+.status-badges { display: flex; gap: 2px; flex-wrap: wrap; }
+.btn { padding: 2px 8px; border: 1px solid var(--vscode-button-border, transparent); background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); cursor: pointer; border-radius: 4px; font-size: 12px; }
 .btn.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
 .section { margin-top: 16px; }
 .actions button { margin-right: 6px; }
 code { font-family: var(--vscode-editor-font-family); }
+.last-commit { font-size: 11px; color: var(--vscode-descriptionForeground); white-space: nowrap; }
+
+/* Select mode */
+.btn.danger { background: var(--vscode-errorForeground, #f44336); color: white; }
+.btn.toggle-active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+.select-col { width: 30px; }
+.select-col input { cursor: pointer; }
+.hidden { display: none !important; }
+.select-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.select-count { font-size: 12px; color: var(--vscode-descriptionForeground); }
+
+/* Preview Modal */
+.preview-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 99; display: none; }
+.preview-panel { position: fixed; top: 10%; left: 10%; right: 10%; bottom: 10%; background: var(--vscode-editor-background); border: 1px solid var(--vscode-editorGroup-border); border-radius: 4px; padding: 16px; overflow: auto; z-index: 100; display: none; box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+.preview-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--vscode-editorGroup-border); padding-bottom: 12px; }
+.preview-header h3 { margin: 0; }
+.preview-options { margin-bottom: 12px; }
+.preview-options label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.preview-actions { margin-top: 16px; display: flex; gap: 8px; justify-content: flex-end; }
+.preview-table { width: 100%; border-collapse: collapse; }
+.preview-table th, .preview-table td { border-bottom: 1px solid var(--vscode-editorGroup-border); padding: 8px; font-size: 12px; text-align: left; }
+.preview-empty { text-align: center; padding: 24px; color: var(--vscode-descriptionForeground); }
 </style>
 </head>
 <body>
   <div class="toolbar">
     <button class="btn primary" id="refresh"></button>
     <button class="btn" id="create"></button>
-    <button class="btn" id="detectDead"></button>
+    <button class="btn" id="selectMode"></button>
     <span id="repo"></span>
     <span id="error" style="color: var(--vscode-errorForeground);"></span>
+    <div class="select-actions hidden" id="selectActions">
+      <span class="select-count" id="selectCount"></span>
+      <button class="btn danger" id="deleteSelected"></button>
+    </div>
+  </div>
+
+  <div class="cleanup-toolbar">
+    <span class="toolbar-label" id="cleanupLabel"></span>
+    <button class="btn" id="cleanupMerged"></button>
+    <button class="btn" id="cleanupStale"></button>
+    <button class="btn" id="cleanupGone"></button>
+    <button class="btn primary" id="cleanupAll"></button>
   </div>
 
   <div class="section">
@@ -32,14 +72,39 @@ code { font-family: var(--vscode-editor-font-family); }
 
   <div class="section">
     <h3 id="remoteTitle"></h3>
+    <div class="cleanup-toolbar">
+      <span class="toolbar-label" id="remoteCleanupLabel"></span>
+      <button class="btn" id="remoteCleanupMerged"></button>
+      <button class="btn" id="remoteCleanupStale"></button>
+      <button class="btn primary" id="remoteCleanupAll"></button>
+    </div>
     <table class="table" id="remote"></table>
+  </div>
+
+  <!-- Preview Modal -->
+  <div class="preview-overlay" id="previewOverlay"></div>
+  <div class="preview-panel" id="previewPanel">
+    <div class="preview-header">
+      <h3 id="previewTitle"></h3>
+      <button class="btn" id="previewClose">×</button>
+    </div>
+    <div class="preview-options">
+      <label>
+        <input type="checkbox" id="includeRemote" />
+        <span id="includeRemoteLabel"></span>
+      </label>
+    </div>
+    <table class="preview-table" id="previewTable"></table>
+    <div class="preview-actions">
+      <button class="btn" id="previewCancel"></button>
+      <button class="btn primary" id="previewExecute"></button>
+    </div>
   </div>
 
   <script nonce="{{NONCE}}">
     const vscode = acquireVsCodeApi();
 
     // Decode base64-encoded i18n data (injected at runtime)
-    // Note: atob() returns a binary string, so we need decodeURIComponent(escape()) to properly handle UTF-8
     const I18N = JSON.parse(decodeURIComponent(escape(atob('{{I18N_B64}}'))));
 
     const $ = (id) => document.getElementById(id);
@@ -48,21 +113,66 @@ code { font-family: var(--vscode-editor-font-family); }
     const repoEl = $('repo');
     const errEl = $('error');
 
+    // Current state cache
+    let currentState = null;
+    let cleanupMode = 'local'; // 'local' or 'remote'
+    let selectModeActive = false;
+
     // Static labels
     $('refresh').textContent = I18N.refresh;
     $('create').textContent = I18N.create;
-    $('detectDead').textContent = I18N.detectDead;
+    $('selectMode').textContent = I18N.selectMode;
+    $('deleteSelected').textContent = I18N.deleteSelected;
     $('localTitle').textContent = I18N.localBranches;
     $('remoteTitle').textContent = I18N.remoteBranches;
 
+    // Cleanup toolbar labels (local)
+    $('cleanupLabel').textContent = I18N.cleanupLabel;
+    $('cleanupMerged').textContent = I18N.cleanupMerged;
+    $('cleanupStale').textContent = I18N.cleanupStale;
+    $('cleanupGone').textContent = I18N.cleanupGone;
+    $('cleanupAll').textContent = I18N.cleanupAll;
+
+    // Cleanup toolbar labels (remote)
+    $('remoteCleanupLabel').textContent = I18N.cleanupLabel;
+    $('remoteCleanupMerged').textContent = I18N.cleanupMerged;
+    $('remoteCleanupStale').textContent = I18N.cleanupStale;
+    $('remoteCleanupAll').textContent = I18N.cleanupAll;
+
+    // Preview panel labels
+    $('previewTitle').textContent = I18N.previewTitle;
+    $('includeRemoteLabel').textContent = I18N.previewIncludeRemote;
+    $('previewCancel').textContent = I18N.previewCancel;
+    $('previewExecute').textContent = I18N.previewExecute;
+
+    // Event listeners
     $('refresh').addEventListener('click', () => vscode.postMessage({ type: 'refresh' }));
     $('create').addEventListener('click', () => vscode.postMessage({ type: 'create' }));
-    $('detectDead').addEventListener('click', () => vscode.postMessage({ type: 'detectDead' }));
+    $('selectMode').addEventListener('click', toggleSelectMode);
+    $('deleteSelected').addEventListener('click', deleteSelectedBranches);
+
+    // Local cleanup buttons
+    $('cleanupMerged').addEventListener('click', () => showCleanupPreview('merged', 'local'));
+    $('cleanupStale').addEventListener('click', () => showCleanupPreview('stale', 'local'));
+    $('cleanupGone').addEventListener('click', () => showCleanupPreview('gone', 'local'));
+    $('cleanupAll').addEventListener('click', () => showCleanupPreview('all', 'local'));
+
+    // Remote cleanup buttons
+    $('remoteCleanupMerged').addEventListener('click', () => showCleanupPreview('merged', 'remote'));
+    $('remoteCleanupStale').addEventListener('click', () => showCleanupPreview('stale', 'remote'));
+    $('remoteCleanupAll').addEventListener('click', () => showCleanupPreview('all', 'remote'));
+
+    // Preview panel events
+    $('previewClose').addEventListener('click', closePreview);
+    $('previewOverlay').addEventListener('click', closePreview);
+    $('previewCancel').addEventListener('click', closePreview);
+    $('previewExecute').addEventListener('click', executeCleanup);
 
     window.addEventListener('message', (e) => {
       const msg = e.data;
       if (msg.type === 'state') {
         errEl.textContent = '';
+        currentState = msg.state;
         render(msg.state);
       } else if (msg.type === 'error') {
         errEl.textContent = msg.message || I18N.errorFallback;
@@ -73,21 +183,51 @@ code { font-family: var(--vscode-editor-font-family); }
       repoEl.textContent = state.repoRoot;
       localEl.innerHTML = '';
       remoteEl.innerHTML = '';
-      renderLocal(state.locals);
-      renderRemote(state.remotes);
+      renderLocal(state.locals, state.showStatusBadges);
+      renderRemote(state.remotes, state.showStatusBadges);
+      updateSelectCount();
     }
 
-    function renderLocal(rows) {
-      const header = '<tr><th>' + escapeHtml(I18N.localHeaderCurrent) + '</th><th>' + escapeHtml(I18N.localHeaderName) + '</th><th>' + escapeHtml(I18N.localHeaderUpstream) + '</th><th>' + escapeHtml(I18N.localHeaderAhead) + '</th><th>' + escapeHtml(I18N.localHeaderBehind) + '</th><th>' + escapeHtml(I18N.localHeaderActions) + '</th></tr>';
+    function renderLocal(rows, showBadges) {
+      const selectColHtml = selectModeActive ? '<th class="select-col"></th>' : '';
+      const header = '<tr>' + selectColHtml + '<th>' + escapeHtml(I18N.localHeaderCurrent) + '</th><th>' + escapeHtml(I18N.localHeaderName) + '</th>'
+        + '<th>' + escapeHtml(I18N.localHeaderStatus) + '</th>'
+        + '<th>' + escapeHtml(I18N.localHeaderUpstream) + '</th><th>' + escapeHtml(I18N.localHeaderAhead) + '</th><th>' + escapeHtml(I18N.localHeaderBehind) + '</th>'
+        + '<th>' + escapeHtml(I18N.localHeaderLastCommit) + '</th>'
+        + '<th>' + escapeHtml(I18N.localHeaderActions) + '</th></tr>';
       localEl.insertAdjacentHTML('beforeend', header);
       for (const r of rows) {
         const cur = r.isCurrent ? '<span class="badge">' + escapeHtml(I18N.badgeHead) + '</span>' : '';
+
+        // Status badges
+        let statusHtml = '<div class="status-badges">';
+        if (showBadges !== false) {
+          if (r.isMerged) statusHtml += '<span class="badge badge-merged">' + escapeHtml(I18N.badgeMerged) + '</span>';
+          if (r.isStale) statusHtml += '<span class="badge badge-stale">' + escapeHtml(I18N.badgeStale) + '</span>';
+          if (r.isGone) statusHtml += '<span class="badge badge-gone">' + escapeHtml(I18N.badgeGone) + '</span>';
+        }
+        statusHtml += '</div>';
+
+        // Last commit age
+        let lastCommitHtml = '';
+        if (r.lastCommitAgeInDays !== undefined) {
+          lastCommitHtml = '<span class="last-commit">' + escapeHtml(I18N.daysAgo.replace('{0}', r.lastCommitAgeInDays)) + '</span>';
+        }
+
+        // Checkbox for select mode (disabled for current branch and protected)
+        const canSelect = !r.isCurrent && !r.protected;
+        const checkboxHtml = selectModeActive
+          ? '<td class="select-col"><input type="checkbox" data-local="' + escapeHtml(r.short) + '"' + (canSelect ? '' : ' disabled') + ' onchange="updateSelectCount()" /></td>'
+          : '';
+
         const tr = document.createElement('tr');
-        tr.innerHTML = '<td>' + cur + '</td>'
+        tr.innerHTML = checkboxHtml + '<td>' + cur + '</td>'
           + '<td><code>' + escapeHtml(r.short) + '</code></td>'
+          + '<td>' + statusHtml + '</td>'
           + '<td>' + (r.upstream ? '<code>' + escapeHtml(r.upstream) + '</code>' : '') + '</td>'
           + '<td>' + (r.ahead ?? '') + '</td>'
           + '<td>' + (r.behind ?? '') + '</td>'
+          + '<td>' + lastCommitHtml + '</td>'
           + '<td class="actions"></td>';
         const actions = tr.querySelector('.actions');
         actions.appendChild(btn(I18N.actionCheckout, () => vscode.postMessage({ type: 'checkout', name: r.short })));
@@ -103,16 +243,43 @@ code { font-family: var(--vscode-editor-font-family); }
       }
     }
 
-    function renderRemote(rows) {
-      const header = '<tr><th>' + escapeHtml(I18N.remoteHeaderRemote) + '</th><th>' + escapeHtml(I18N.remoteHeaderName) + '</th><th>' + escapeHtml(I18N.remoteHeaderActions) + '</th></tr>';
+    function renderRemote(rows, showBadges) {
+      const selectColHtml = selectModeActive ? '<th class="select-col"></th>' : '';
+      const header = '<tr>' + selectColHtml + '<th>' + escapeHtml(I18N.remoteHeaderRemote) + '</th><th>' + escapeHtml(I18N.remoteHeaderName) + '</th>'
+        + '<th>' + escapeHtml(I18N.localHeaderStatus) + '</th>'
+        + '<th>' + escapeHtml(I18N.localHeaderLastCommit) + '</th>'
+        + '<th>' + escapeHtml(I18N.remoteHeaderActions) + '</th></tr>';
       remoteEl.insertAdjacentHTML('beforeend', header);
       for (const r of rows) {
         const parts = r.short.split('/');
         const remote = parts.shift();
         const name = parts.join('/');
+
+        // Status badges
+        let statusHtml = '<div class="status-badges">';
+        if (showBadges !== false) {
+          if (r.isMerged) statusHtml += '<span class="badge badge-merged">' + escapeHtml(I18N.badgeMerged) + '</span>';
+          if (r.isStale) statusHtml += '<span class="badge badge-stale">' + escapeHtml(I18N.badgeStale) + '</span>';
+        }
+        statusHtml += '</div>';
+
+        // Last commit age
+        let lastCommitHtml = '';
+        if (r.lastCommitAgeInDays !== undefined) {
+          lastCommitHtml = '<span class="last-commit">' + escapeHtml(I18N.daysAgo.replace('{0}', r.lastCommitAgeInDays)) + '</span>';
+        }
+
+        // Checkbox for select mode (disabled for protected)
+        const canSelect = !r.protected;
+        const checkboxHtml = selectModeActive
+          ? '<td class="select-col"><input type="checkbox" data-remote="' + escapeHtml(r.short) + '"' + (canSelect ? '' : ' disabled') + ' onchange="updateSelectCount()" /></td>'
+          : '';
+
         const tr = document.createElement('tr');
-        tr.innerHTML = '<td>' + escapeHtml(remote) + '</td>'
+        tr.innerHTML = checkboxHtml + '<td>' + escapeHtml(remote) + '</td>'
           + '<td><code>' + escapeHtml(name) + '</code></td>'
+          + '<td>' + statusHtml + '</td>'
+          + '<td>' + lastCommitHtml + '</td>'
           + '<td class="actions"></td>';
         const actions = tr.querySelector('.actions');
         actions.appendChild(btn(I18N.actionCheckout, () => vscode.postMessage({ type: 'checkout', name: r.short })));
@@ -124,12 +291,131 @@ code { font-family: var(--vscode-editor-font-family); }
       }
     }
 
+    function showCleanupPreview(filter, mode) {
+      if (!currentState) return;
+      cleanupMode = mode || 'local';
+
+      const source = cleanupMode === 'remote' ? currentState.remotes : currentState.locals;
+      const candidates = source.filter(b => {
+        if (b.protected) return false;
+        if (cleanupMode === 'local' && b.isCurrent) return false;
+        if (filter === 'merged') return b.isMerged;
+        if (filter === 'stale') return b.isStale;
+        if (filter === 'gone') return b.isGone;
+        if (filter === 'all') {
+          if (cleanupMode === 'remote') return b.isMerged || b.isStale;
+          return b.isMerged || b.isStale || b.isGone;
+        }
+        return false;
+      });
+
+      // Hide "include remote" option when cleaning remote branches
+      $('includeRemote').parentElement.style.display = cleanupMode === 'remote' ? 'none' : '';
+
+      renderPreview(candidates);
+      $('previewOverlay').style.display = 'block';
+      $('previewPanel').style.display = 'block';
+    }
+
+    function renderPreview(candidates) {
+      const table = $('previewTable');
+      table.innerHTML = '';
+
+      if (candidates.length === 0) {
+        table.innerHTML = '<tr><td class="preview-empty" colspan="4">' + escapeHtml(I18N.previewNoCandidates) + '</td></tr>';
+        $('previewExecute').disabled = true;
+        return;
+      }
+
+      $('previewExecute').disabled = false;
+
+      const header = '<tr><th><input type="checkbox" id="selectAll" checked /></th><th>' + escapeHtml(I18N.localHeaderName) + '</th><th>' + escapeHtml(I18N.previewReasons) + '</th><th>' + escapeHtml(I18N.localHeaderLastCommit) + '</th></tr>';
+      table.insertAdjacentHTML('beforeend', header);
+
+      $('selectAll').addEventListener('change', (e) => {
+        const checkboxes = table.querySelectorAll('input[type="checkbox"][data-branch]');
+        checkboxes.forEach(cb => cb.checked = e.target.checked);
+      });
+
+      for (const b of candidates) {
+        const tr = document.createElement('tr');
+
+        let reasons = [];
+        if (b.isMerged) reasons.push('<span class="badge badge-merged">' + escapeHtml(I18N.badgeMerged) + '</span>');
+        if (b.isStale) reasons.push('<span class="badge badge-stale">' + escapeHtml(I18N.badgeStale) + '</span>');
+        if (b.isGone) reasons.push('<span class="badge badge-gone">' + escapeHtml(I18N.badgeGone) + '</span>');
+
+        let lastCommitHtml = '';
+        if (b.lastCommitAgeInDays !== undefined) {
+          lastCommitHtml = escapeHtml(I18N.daysAgo.replace('{0}', b.lastCommitAgeInDays));
+        }
+
+        tr.innerHTML = '<td><input type="checkbox" data-branch="' + escapeHtml(b.short) + '" checked /></td>'
+          + '<td><code>' + escapeHtml(b.short) + '</code></td>'
+          + '<td>' + reasons.join(' ') + '</td>'
+          + '<td>' + lastCommitHtml + '</td>';
+        table.appendChild(tr);
+      }
+    }
+
+    function closePreview() {
+      $('previewOverlay').style.display = 'none';
+      $('previewPanel').style.display = 'none';
+    }
+
+    function executeCleanup() {
+      const table = $('previewTable');
+      const checkboxes = table.querySelectorAll('input[type="checkbox"][data-branch]:checked');
+      const branches = Array.from(checkboxes).map(cb => cb.dataset.branch);
+
+      if (branches.length === 0) {
+        closePreview();
+        return;
+      }
+
+      if (cleanupMode === 'remote') {
+        vscode.postMessage({ type: 'executeRemoteCleanup', branches });
+      } else {
+        const includeRemote = $('includeRemote').checked;
+        vscode.postMessage({ type: 'executeCleanup', branches, includeRemote });
+      }
+      closePreview();
+    }
+
     function btn(label, onClick) {
       const b = document.createElement('button');
       b.className = 'btn';
       b.textContent = label;
       b.addEventListener('click', onClick);
       return b;
+    }
+
+    function toggleSelectMode() {
+      selectModeActive = !selectModeActive;
+      $('selectMode').classList.toggle('toggle-active', selectModeActive);
+      $('selectActions').classList.toggle('hidden', !selectModeActive);
+      if (currentState) {
+        render(currentState);
+      }
+    }
+
+    function updateSelectCount() {
+      const localChecked = document.querySelectorAll('input[data-local]:checked').length;
+      const remoteChecked = document.querySelectorAll('input[data-remote]:checked').length;
+      const total = localChecked + remoteChecked;
+      $('selectCount').textContent = I18N.selectedCount.replace('{0}', total);
+      $('deleteSelected').disabled = total === 0;
+    }
+
+    function deleteSelectedBranches() {
+      const localBranches = Array.from(document.querySelectorAll('input[data-local]:checked')).map(cb => cb.dataset.local);
+      const remoteBranches = Array.from(document.querySelectorAll('input[data-remote]:checked')).map(cb => cb.dataset.remote);
+
+      if (localBranches.length === 0 && remoteBranches.length === 0) {
+        return;
+      }
+
+      vscode.postMessage({ type: 'deleteSelectedBranches', localBranches, remoteBranches });
     }
 
     function escapeHtml(s) {

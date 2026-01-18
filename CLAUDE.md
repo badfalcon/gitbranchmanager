@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Git Branch Manager is a VS Code extension that provides a unified UI for managing Git branches. It enables checkout, create, rename, delete, merge, and dead branch detection operations from a single webview panel.
+Git Branch Cleaner is a VS Code extension focused on cleaning up Git branches. It provides detection and deletion of dead/stale/gone branches, along with full branch management capabilities (checkout, create, rename, delete, merge) from a single webview panel.
 
 ## Build, Test, and Develop Commands
 
@@ -33,19 +33,25 @@ npm run vscode:prepublish
 The extension follows a layered architecture:
 
 ### **Extension Entry Point** ([src/extension.ts](src/extension.ts))
-- Registers the `gitbranchmanager.openManager` command
+- Registers the `gitbranchcleaner.openCleaner` command
 - Calls `pickRepository()` to let user select a Git repo (in multi-folder workspaces)
 - Opens the webview panel via `openManagerPanel()`
 
 ### **Core Application Logic** ([src/app.ts](src/app.ts))
 Main TypeScript module containing:
 
-- **Types**: `BranchRow`, `BranchKind`, `WebviewMessage`, `ExtensionConfig`, `RepoContext`
-- **Configuration**: `getCfg()` reads VS Code settings (`gitBranchManager.*`)
+- **Types**: `BranchRow`, `BranchKind`, `WebviewMessage`, `ExtensionConfig`, `RepoContext`, `CleanupFilter`
+- **Configuration**: `getCfg()` reads VS Code settings (`gitBranchCleaner.*`)
 - **Git Operations**: Pure functions that wrap `runGit()` calls:
   - **Queries**: `listLocalBranches()`, `listRemoteBranches()`, `getCurrentBranch()`, `resolveBaseBranch()`
   - **Actions**: `checkoutBranch()`, `createBranch()`, `renameBranch()`, `deleteLocalBranch()`, `mergeIntoCurrent()`, `deleteRemoteBranch()`
-  - **Dead branch detection**: `detectDeadBranches()`, `getUpstreamMap()`
+  - **Cleanup Detection**:
+    - `detectDeadBranches()` - finds merged branches
+    - `detectStaleBranches()` - finds branches with old commits
+    - `detectGoneBranches()` - finds branches with deleted upstream
+    - `getBranchLastCommitDates()` - gets commit age info
+    - `listLocalBranchesWithStatus()` - combined status for all branches
+    - `fetchWithPrune()` - updates remote tracking refs
 - **Helpers**:
   - `isProtectedBranch()` - supports exact match, prefix (`*`), and glob patterns
   - `parseTrackShort()` - parses git ahead/behind counts
@@ -59,43 +65,58 @@ Main TypeScript module containing:
 
 ### **Webview Panel** ([src/webview/panel.ts](src/webview/panel.ts))
 - `openManagerPanel()` - creates webview, injects CSP/nonce, handles message dispatch
-- Message handler for user actions (checkout, create, rename, delete, merge, detect dead)
-- `getState()` - fetches current branch list and status
+- Message handler for user actions (checkout, create, rename, delete, merge, cleanup)
+- `getState()` - fetches current branch list with cleanup status indicators
+- Auto-fetches with prune when `autoFetchPrune` is enabled
 - Embeds webview i18n strings as base64 JSON
 - Loads HTML from [media/branchManager.html](media/branchManager.html)
 
 ### **Webview UI** ([media/branchManager.html](media/branchManager.html))
 - Static HTML with inline CSS/JavaScript
-- Tables for local and remote branches
-- Action buttons (checkout, log, rename, delete, merge into current, etc.)
+- Tables for local and remote branches with status badges
+- Cleanup toolbar with Merged/Stale/Gone/Cleanup All buttons
+- Preview modal for bulk deletion with checkbox selection
 - i18n strings injected at runtime as base64-encoded JSON
 
 ## Key Design Patterns
 
 ### Protected Branches
-- Configured via `gitBranchManager.protectedBranches` setting
+- Configured via `gitBranchCleaner.protectedBranches` setting
 - Supports:
   - Exact match: `"main"`
   - Prefix match: `"release/*"`
   - Glob patterns: `"hotfix/*/wip"` (converts `*` to `.*` regex)
-- Blocks: delete, rename, merge (as source), delete remote operations
+- Blocks: delete, rename, merge (as source), delete remote, cleanup operations
 
-### Dead Branch Detection
-- Base branch resolved via `resolveBaseBranch()`:
-  1. Uses configured `baseBranch` if not "auto"
-  2. Tries `origin/HEAD` symbolic ref
-  3. Falls back to `main` → `master` → `develop`
-  4. Uses current branch if all else fails
-- Finds merged branches via `git branch --merged BASE`
-- Can optionally delete corresponding remote branches via upstream tracking
+### Branch Cleanup Detection
+Three types of cleanup candidates:
+
+1. **Merged (Dead)**: Branches fully merged into base branch
+   - Base branch resolved via `resolveBaseBranch()`:
+     1. Uses configured `baseBranch` if not "auto"
+     2. Tries `origin/HEAD` symbolic ref
+     3. Falls back to `main` → `master` → `develop`
+     4. Uses current branch if all else fails
+   - Detected via `git branch --merged BASE`
+
+2. **Stale**: Branches with no commits for N days
+   - Threshold configured via `staleDays` setting (default: 30)
+   - Uses `git for-each-ref` to get commit dates
+
+3. **Gone**: Local tracking branches whose upstream was deleted
+   - Detected via `git branch -vv` looking for `[origin/xxx: gone]`
+   - Optional auto `git fetch --prune` via `autoFetchPrune` setting
 
 ### Configuration Keys
-All settings are under `gitBranchManager.*`:
-- `baseBranch` (default: "auto") - base branch for dead detection
+All settings are under `gitBranchCleaner.*`:
+- `baseBranch` (default: "auto") - base branch for merged detection
 - `protectedBranches` (default: ["main", "master", "develop"]) - protected branch patterns
 - `confirmBeforeDelete` (default: true) - show confirmation before destructive ops
 - `forceDeleteLocal` (default: false) - use `git branch -D` instead of `-d`
 - `includeRemoteInDeadCleanup` (default: false) - delete remote when cleaning dead local
+- `staleDays` (default: 30) - days threshold for stale detection
+- `autoFetchPrune` (default: false) - auto fetch with prune before gone detection
+- `showStatusBadges` (default: true) - show merged/stale/gone badges in branch list
 
 ## Webview Message Protocol
 
@@ -111,10 +132,10 @@ Two-way message flow between extension and webview:
 - `{ type: 'deleteLocal'; name: string }` - delete local branch
 - `{ type: 'mergeIntoCurrent'; source: string }` - merge into current
 - `{ type: 'deleteRemote'; remote: string; name: string }` - delete remote branch
-- `{ type: 'detectDead' }` - find merged branches (multi-select + delete)
+- `{ type: 'executeCleanup'; branches: string[]; includeRemote: boolean }` - bulk delete selected branches
 
 **Extension → Webview (State)**:
-- `{ type: 'state'; state: { locals: BranchRow[]; remotes: BranchRow[]; current?: string; repoRoot: string } }` - branch list
+- `{ type: 'state'; state: { locals: BranchRow[]; remotes: BranchRow[]; current?: string; repoRoot: string; showStatusBadges?: boolean } }` - branch list with status
 - `{ type: 'error'; message: string }` - error notification
 
 ## Testing
@@ -133,7 +154,7 @@ Run tests with `npm test` (auto-compiles and lints first).
   - `bundle.l10n.json` - English (fallback)
   - `bundle.l10n.ja.json` - Japanese
 - All user-facing strings use `vscode.l10n.t()` with optional parameters
-- Webview i18n: strings built into `getWebviewI18n()` in [src/webview/panel.ts](src/webview/panel.ts:320)
+- Webview i18n: strings built into `getWebviewI18n()` in [src/webview/panel.ts](src/webview/panel.ts)
 
 ## Build Outputs
 
@@ -153,7 +174,7 @@ Run tests with `npm test` (auto-compiles and lints first).
 ## File Structure
 
 ```
-gitbranchmanager/
+gitbranchcleaner/
 ├── src/
 │   ├── extension.ts           # Entry point, command registration
 │   ├── app.ts                 # Core logic (types, git ops, config, helpers)

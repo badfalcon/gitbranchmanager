@@ -1,17 +1,20 @@
 {
-  "extension.displayName": "Git Branch Manager",
-  "extension.description": "VS Code 上で Git のブランチ操作をまとめて行うための拡張です（チェックアウト/作成/リネーム/削除/マージ/デッドブランチ検出）。",
+  "extension.displayName": "Git Branch Cleaner",
+  "extension.description": "Git ブランチの整理に特化した VS Code 拡張です（デッド/古い/削除済みリモートのブランチ検出・削除、その他ブランチ管理機能）。",
 
-  "command.openManager.title": "ブランチ管理: 開く",
+  "command.openCleaner.title": "ブランチクリーナー: 開く",
 
-  "config.title": "Git Branch Manager",
+  "config.title": "Git Branch Cleaner",
   "config.baseBranch.description": "デッドブランチ検出の基準ブランチ。「auto」の場合は origin/HEAD を優先し、無ければ main/master/develop を順に探索します。",
   "config.protectedBranches.description": "保護ブランチ。削除/検出/リネーム/マージ元指定の対象外になります。* を使用した glob パターンに対応しています。",
   "config.confirmBeforeDelete.description": "削除など破壊的操作前に確認ダイアログを表示します。",
   "config.forceDeleteLocal.description": "ローカル削除を強制します (git branch -D)。",
   "config.includeRemoteInDeadCleanup.description": "デッドブランチ一括削除時に、対応する追跡リモートがある場合はリモート削除も試行します。",
+  "config.staleDays.description": "最終コミットから何日経過したブランチを「古い」と見なすか。",
+  "config.autoFetchPrune.description": "Gone ブランチ検出前に自動で 'git fetch --prune' を実行します。",
+  "config.showStatusBadges.description": "ブランチ一覧にステータスバッジ（マージ済み/古い/削除済み）を表示します。",
 
-  "Git Branch Manager activated": "Git Branch Manager が有効化されました",
+  "Git Branch Cleaner activated": "Git Branch Cleaner が有効化されました",
   "No Git repository found. Open a folder or initialize Git.": "Git リポジトリが見つかりません。フォルダを開くか Git を初期化してください。",
 
   "Please enter a branch name.": "ブランチ名を入力してください",
@@ -23,7 +26,7 @@
   "Yes": "はい",
   "Select a Git repository": "Git リポジトリを選択",
 
-  "Branch Manager": "ブランチマネージャー",
+  "Branch Cleaner": "ブランチクリーナー",
   "Git Log": "Git Log",
 
   "New branch name": "新しいブランチ名",
@@ -55,9 +58,11 @@
 
   "Current": "現在",
   "Name": "名前",
+  "Status": "状態",
   "Upstream": "上流",
   "Ahead": "先行",
   "Behind": "遅延",
+  "Last Commit": "最終コミット",
   "Actions": "操作",
 
   "Remote": "リモート",
@@ -69,5 +74,35 @@
   "Merge into current": "現在へマージ",
   "Delete Remote": "リモート削除",
 
-  "HEAD": "HEAD"
+  "HEAD": "HEAD",
+
+  "merged": "マージ済",
+  "stale": "古い",
+  "gone": "削除済",
+
+  "Cleanup:": "整理:",
+  "Merged": "マージ済み",
+  "Stale": "古いブランチ",
+  "Gone": "削除済み",
+  "Cleanup All": "一括整理",
+
+  "Cleanup Preview": "整理プレビュー",
+  "Also delete corresponding remote branches": "対応するリモートブランチも削除する",
+  "Cancel": "キャンセル",
+  "Delete Selected": "選択を削除",
+  "Select All": "全選択",
+  "Reasons": "理由",
+  "No cleanup candidates found.": "整理対象のブランチが見つかりません。",
+
+  "{0}d ago": "{0}日前",
+
+  "Local: {0}": "ローカル: {0}",
+  "Remote: {0}": "リモート: {0}",
+  "Failed to delete some branches: {0}": "一部のブランチを削除できませんでした: {0}",
+  "{0} branches are not fully merged. Force delete them?": "{0} 件のブランチはマージされていません。強制削除しますか？",
+  "Delete {0} selected remote branches?": "選択した {0} 件のリモートブランチを削除しますか？",
+  "Delete {0} selected branches?": "選択した {0} 件のブランチを削除しますか？",
+  "Select": "選択",
+  "{0} selected": "{0} 件選択中",
+  "Also delete {0} remote branches with same name (not tracked)?": "同名のリモートブランチ（未追跡）も {0} 件削除しますか？"
 }

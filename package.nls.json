@@ -1,13 +1,16 @@
 {
-  "extension.displayName": "Simple Branch Manager",
-  "extension.description": "A VS Code extension for managing Git branches from a single UI (checkout/create/rename/delete/merge/detect dead branches).",
+  "extension.displayName": "Git Branch Cleaner",
+  "extension.description": "A VS Code extension for cleaning up Git branches (detect and delete dead/stale/gone branches, with full branch management).",
 
-  "command.openManager.title": "Git Branch Manager: Open",
+  "command.openCleaner.title": "Git Branch Cleaner: Open",
 
-  "config.title": "Git Branch Manager",
+  "config.title": "Git Branch Cleaner",
   "config.baseBranch.description": "Base branch used for dead-branch detection. If 'auto', prefers origin/HEAD, then tries main/master/develop.",
   "config.protectedBranches.description": "Protected branches excluded from delete/detect/rename/merge-source actions. Supports glob patterns with *.",
   "config.confirmBeforeDelete.description": "Show confirmation dialog before destructive actions.",
   "config.forceDeleteLocal.description": "Force delete local branches (git branch -D).",
-  "config.includeRemoteInDeadCleanup.description": "When bulk deleting dead branches, also try to delete corresponding remote branches."
+  "config.includeRemoteInDeadCleanup.description": "When bulk deleting dead branches, also try to delete corresponding remote branches.",
+  "config.staleDays.description": "Number of days since last commit to consider a branch as stale.",
+  "config.autoFetchPrune.description": "Automatically run 'git fetch --prune' before detecting gone branches.",
+  "config.showStatusBadges.description": "Show status badges (merged/stale/gone) in the branch list."
 }
