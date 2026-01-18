@@ -1,5 +1,5 @@
 {
-  "name": "gitbranchcleaner",
+  "name": "gitsouji",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
   "version": "1.0.0",
@@ -21,7 +21,8 @@
     "dead",
     "stale",
     "scm",
-    "source control"
+    "source control",
+    "souji"
   ],
   "engines": {
     "vscode": "^1.106.1"
@@ -31,14 +32,14 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:gitbranchcleaner.openCleaner"
+    "onCommand:gitsouji.openCleaner"
   ],
   "main": "./dist/extension.js",
   "l10n": "./l10n",
   "contributes": {
     "commands": [
       {
-        "command": "gitbranchcleaner.openCleaner",
+        "command": "gitsouji.openCleaner",
         "title": "%command.openCleaner.title%",
         "icon": "$(git-branch)"
       }
@@ -46,44 +47,44 @@
     "configuration": {
       "title": "%config.title%",
       "properties": {
-        "gitBranchCleaner.baseBranch": {
+        "gitSouji.baseBranch": {
           "type": "string",
           "default": "auto",
           "description": "%config.baseBranch.description%"
         },
-        "gitBranchCleaner.protectedBranches": {
+        "gitSouji.protectedBranches": {
           "type": "array",
           "items": { "type": "string" },
           "default": ["main", "master", "develop"],
           "description": "%config.protectedBranches.description%"
         },
-        "gitBranchCleaner.confirmBeforeDelete": {
+        "gitSouji.confirmBeforeDelete": {
           "type": "boolean",
           "default": true,
           "description": "%config.confirmBeforeDelete.description%"
         },
-        "gitBranchCleaner.forceDeleteLocal": {
+        "gitSouji.forceDeleteLocal": {
           "type": "boolean",
           "default": false,
           "description": "%config.forceDeleteLocal.description%"
         },
-        "gitBranchCleaner.includeRemoteInDeadCleanup": {
+        "gitSouji.includeRemoteInDeadCleanup": {
           "type": "boolean",
           "default": false,
           "description": "%config.includeRemoteInDeadCleanup.description%"
         },
-        "gitBranchCleaner.staleDays": {
+        "gitSouji.staleDays": {
           "type": "number",
           "default": 30,
           "minimum": 1,
           "description": "%config.staleDays.description%"
         },
-        "gitBranchCleaner.autoFetchPrune": {
+        "gitSouji.autoFetchPrune": {
           "type": "boolean",
           "default": false,
           "description": "%config.autoFetchPrune.description%"
         },
-        "gitBranchCleaner.showStatusBadges": {
+        "gitSouji.showStatusBadges": {
           "type": "boolean",
           "default": true,
           "description": "%config.showStatusBadges.description%"
@@ -93,7 +94,7 @@
     "menus": {
       "scm/title": [
         {
-          "command": "gitbranchcleaner.openCleaner",
+          "command": "gitsouji.openCleaner",
           "group": "navigation@10",
           "when": "scmProvider == git"
         }

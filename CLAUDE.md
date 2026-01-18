@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Git Branch Cleaner is a VS Code extension focused on cleaning up Git branches. It provides detection and deletion of dead/stale/gone branches for both local and remote, along with full branch management capabilities (checkout, create, rename, delete, merge) from a single webview panel.
+Git Souji is a VS Code extension focused on cleaning up Git branches. "Souji" means "cleaning" in Japanese. It provides detection and deletion of dead/stale/gone branches for both local and remote, along with full branch management capabilities (checkout, create, rename, delete, merge) from a single webview panel.
 
 ## Build, Test, and Develop Commands
 
@@ -33,7 +33,7 @@ npm run vscode:prepublish
 The extension follows a layered architecture:
 
 ### **Extension Entry Point** ([src/extension.ts](src/extension.ts))
-- Registers the `gitbranchcleaner.openCleaner` command
+- Registers the `gitsouji.openCleaner` command
 - Calls `pickRepository()` to let user select a Git repo (in multi-folder workspaces)
 - Opens the webview panel via `openManagerPanel()`
 
@@ -41,7 +41,7 @@ The extension follows a layered architecture:
 Main TypeScript module containing:
 
 - **Types**: `BranchRow`, `BranchKind`, `WebviewMessage`, `ExtensionConfig`, `RepoContext`, `CleanupFilter`
-- **Configuration**: `getCfg()` reads VS Code settings (`gitBranchCleaner.*`)
+- **Configuration**: `getCfg()` reads VS Code settings (`gitSouji.*`)
 - **Git Operations**: Pure functions that wrap `runGit()` calls:
   - **Queries**: `listLocalBranches()`, `listRemoteBranches()`, `getCurrentBranch()`, `resolveBaseBranch()`
   - **Actions**: `checkoutBranch()`, `createBranch()`, `renameBranch()`, `deleteLocalBranch()`, `mergeIntoCurrent()`, `deleteRemoteBranch()`
@@ -89,7 +89,7 @@ Main TypeScript module containing:
 ## Key Design Patterns
 
 ### Protected Branches
-- Configured via `gitBranchCleaner.protectedBranches` setting
+- Configured via `gitSouji.protectedBranches` setting
 - Supports:
   - Exact match: `"main"`
   - Prefix match: `"release/*"`
@@ -145,7 +145,7 @@ Main TypeScript module containing:
 - Click "Delete Selected" to bulk delete all selected branches
 
 ### Configuration Keys
-All settings are under `gitBranchCleaner.*`:
+All settings are under `gitSouji.*`:
 - `baseBranch` (default: "auto") - base branch for merged detection
 - `protectedBranches` (default: ["main", "master", "develop"]) - protected branch patterns
 - `confirmBeforeDelete` (default: true) - show confirmation before destructive ops
@@ -213,7 +213,7 @@ Run tests with `npm test` (auto-compiles and lints first).
 ## File Structure
 
 ```
-gitbranchcleaner/
+gitsouji/
 ├── src/
 │   ├── extension.ts           # Entry point, command registration
 │   ├── app.ts                 # Core logic (types, git ops, config, helpers)

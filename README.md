@@ -1,10 +1,10 @@
-# Git Branch Cleaner
+# Git Souji
 
 ## English
 
-A VS Code extension for cleaning up Git branches (detect and delete dead/stale/gone branches, with full branch management).
+A VS Code extension for cleaning up Git branches (detect and delete dead/stale/gone branches, with full branch management). "Souji" means "cleaning" in Japanese.
 
-- Command: **Git Branch Cleaner: Open** (`gitbranchcleaner.openCleaner`)
+- Command: **Git Souji: Open** (`gitsouji.openCleaner`)
 - You can also launch it from the SCM (Source Control) view title bar.
 
 ### Features
@@ -42,7 +42,7 @@ A VS Code extension for cleaning up Git branches (detect and delete dead/stale/g
 
 ### Usage
 1. Open a folder containing a Git repository in VS Code
-2. Run **Git Branch Cleaner: Open** from the Command Palette
+2. Run **Git Souji: Open** from the Command Palette
    - Or run it from the SCM view menu
 3. Use the buttons in the webview
 
@@ -52,25 +52,25 @@ Example `settings.json`:
 
 ```json
 {
-  "gitBranchCleaner.baseBranch": "auto",
-  "gitBranchCleaner.protectedBranches": ["main", "master", "develop", "release/*"],
-  "gitBranchCleaner.confirmBeforeDelete": true,
-  "gitBranchCleaner.forceDeleteLocal": false,
-  "gitBranchCleaner.includeRemoteInDeadCleanup": false,
-  "gitBranchCleaner.staleDays": 30,
-  "gitBranchCleaner.autoFetchPrune": false,
-  "gitBranchCleaner.showStatusBadges": true
+  "gitSouji.baseBranch": "auto",
+  "gitSouji.protectedBranches": ["main", "master", "develop", "release/*"],
+  "gitSouji.confirmBeforeDelete": true,
+  "gitSouji.forceDeleteLocal": false,
+  "gitSouji.includeRemoteInDeadCleanup": false,
+  "gitSouji.staleDays": 30,
+  "gitSouji.autoFetchPrune": false,
+  "gitSouji.showStatusBadges": true
 }
 ```
 
-- `gitBranchCleaner.baseBranch`: Base branch used for dead-branch detection. If `auto`, it prefers `origin/HEAD`, then tries `main/master/develop`.
-- `gitBranchCleaner.protectedBranches`: Protected branches excluded from delete/detect/rename/merge-source actions. Simple glob (`*`) is supported.
-- `gitBranchCleaner.confirmBeforeDelete`: Show confirmation dialog before destructive actions.
-- `gitBranchCleaner.forceDeleteLocal`: Force delete local branches (`git branch -D`).
-- `gitBranchCleaner.includeRemoteInDeadCleanup`: When bulk deleting dead branches, also try to delete corresponding remote branches.
-- `gitBranchCleaner.staleDays`: Number of days since last commit to consider a branch as stale (default: 30).
-- `gitBranchCleaner.autoFetchPrune`: Automatically run `git fetch --prune` before detecting gone branches.
-- `gitBranchCleaner.showStatusBadges`: Show status badges (merged/stale/gone) in the branch list.
+- `gitSouji.baseBranch`: Base branch used for dead-branch detection. If `auto`, it prefers `origin/HEAD`, then tries `main/master/develop`.
+- `gitSouji.protectedBranches`: Protected branches excluded from delete/detect/rename/merge-source actions. Simple glob (`*`) is supported.
+- `gitSouji.confirmBeforeDelete`: Show confirmation dialog before destructive actions.
+- `gitSouji.forceDeleteLocal`: Force delete local branches (`git branch -D`).
+- `gitSouji.includeRemoteInDeadCleanup`: When bulk deleting dead branches, also try to delete corresponding remote branches.
+- `gitSouji.staleDays`: Number of days since last commit to consider a branch as stale (default: 30).
+- `gitSouji.autoFetchPrune`: Automatically run `git fetch --prune` before detecting gone branches.
+- `gitSouji.showStatusBadges`: Show status badges (merged/stale/gone) in the branch list.
 
 ### Implementation Notes
 - The webview HTML is at `media/branchManager.html`. CSP/nonce are injected at runtime.
@@ -90,9 +90,9 @@ npm test
 
 ## 日本語
 
-Git ブランチの整理に特化した VS Code 拡張です（デッド/古い/削除済みリモートのブランチ検出・削除、その他ブランチ管理機能）。
+Git ブランチの整理（掃除）に特化した VS Code 拡張です（デッド/古い/削除済みリモートのブランチ検出・削除、その他ブランチ管理機能）。
 
-- コマンド: **ブランチクリーナー: 開く** (`gitbranchcleaner.openCleaner`)
+- コマンド: **Git Souji: 開く** (`gitsouji.openCleaner`)
 - SCMビュー（Source Control）のタイトルバーからも起動できます
 
 ### Features
@@ -130,7 +130,7 @@ Git ブランチの整理に特化した VS Code 拡張です（デッド/古い
 
 ### Usage
 1. Gitリポジトリを含むフォルダをVS Codeで開く
-2. コマンドパレットで **ブランチクリーナー: 開く** を実行
+2. コマンドパレットで **Git Souji: 開く** を実行
    - または SCM ビュー上部のメニューから実行
 3. Webview上のボタンで操作
 
@@ -140,25 +140,25 @@ Git ブランチの整理に特化した VS Code 拡張です（デッド/古い
 
 ```json
 {
-  "gitBranchCleaner.baseBranch": "auto",
-  "gitBranchCleaner.protectedBranches": ["main", "master", "develop", "release/*"],
-  "gitBranchCleaner.confirmBeforeDelete": true,
-  "gitBranchCleaner.forceDeleteLocal": false,
-  "gitBranchCleaner.includeRemoteInDeadCleanup": false,
-  "gitBranchCleaner.staleDays": 30,
-  "gitBranchCleaner.autoFetchPrune": false,
-  "gitBranchCleaner.showStatusBadges": true
+  "gitSouji.baseBranch": "auto",
+  "gitSouji.protectedBranches": ["main", "master", "develop", "release/*"],
+  "gitSouji.confirmBeforeDelete": true,
+  "gitSouji.forceDeleteLocal": false,
+  "gitSouji.includeRemoteInDeadCleanup": false,
+  "gitSouji.staleDays": 30,
+  "gitSouji.autoFetchPrune": false,
+  "gitSouji.showStatusBadges": true
 }
 ```
 
-- `gitBranchCleaner.baseBranch`: デッドブランチ検出の基準ブランチ。`auto` の場合は `origin/HEAD` を優先し、無ければ `main/master/develop` を順に探索します。
-- `gitBranchCleaner.protectedBranches`: 保護ブランチ。**削除/検出/リネーム/マージ元指定** の対象外になります。`release/*` のような簡易glob（`*`）に対応。
-- `gitBranchCleaner.confirmBeforeDelete`: 削除など破壊的操作前に確認ダイアログを表示。
-- `gitBranchCleaner.forceDeleteLocal`: ローカル削除を強制（`git branch -D`）。
-- `gitBranchCleaner.includeRemoteInDeadCleanup`: デッドブランチ一括削除時に、対応する追跡リモートがある場合はリモート削除も試行。
-- `gitBranchCleaner.staleDays`: 最終コミットから何日経過したブランチを「古い」と見なすか（デフォルト: 30）。
-- `gitBranchCleaner.autoFetchPrune`: Gone ブランチ検出前に自動で `git fetch --prune` を実行。
-- `gitBranchCleaner.showStatusBadges`: ブランチ一覧にステータスバッジ（マージ済み/古い/削除済み）を表示。
+- `gitSouji.baseBranch`: デッドブランチ検出の基準ブランチ。`auto` の場合は `origin/HEAD` を優先し、無ければ `main/master/develop` を順に探索します。
+- `gitSouji.protectedBranches`: 保護ブランチ。**削除/検出/リネーム/マージ元指定** の対象外になります。`release/*` のような簡易glob（`*`）に対応。
+- `gitSouji.confirmBeforeDelete`: 削除など破壊的操作前に確認ダイアログを表示。
+- `gitSouji.forceDeleteLocal`: ローカル削除を強制（`git branch -D`）。
+- `gitSouji.includeRemoteInDeadCleanup`: デッドブランチ一括削除時に、対応する追跡リモートがある場合はリモート削除も試行。
+- `gitSouji.staleDays`: 最終コミットから何日経過したブランチを「古い」と見なすか（デフォルト: 30）。
+- `gitSouji.autoFetchPrune`: Gone ブランチ検出前に自動で `git fetch --prune` を実行。
+- `gitSouji.showStatusBadges`: ブランチ一覧にステータスバッジ（マージ済み/古い/削除済み）を表示。
 
 ### Implementation Notes
 - WebviewのHTMLは `media/branchManager.html` に置いてあり、起動時にCSP/nonceを差し込んで読み込みます。

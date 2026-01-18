@@ -76,7 +76,7 @@ export type ExtensionConfig = {
 };
 
 export function getCfg(): ExtensionConfig {
-  const cfg = vscode.workspace.getConfiguration('gitBranchCleaner');
+  const cfg = vscode.workspace.getConfiguration('gitSouji');
   return {
     baseBranch: cfg.get<string>('baseBranch', 'auto'),
     protected: cfg.get<string[]>('protectedBranches', ['main', 'master', 'develop']),
