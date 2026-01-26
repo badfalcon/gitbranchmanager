@@ -1,10 +1,10 @@
 {
-  "extension.displayName": "Git Branch Cleaner",
+  "extension.displayName": "Git Souji",
   "extension.description": "A VS Code extension for cleaning up Git branches (detect and delete dead/stale/gone branches, with full branch management).",
 
-  "command.openCleaner.title": "Git Branch Cleaner: Open",
+  "command.openCleaner.title": "Git Souji: Open",
 
-  "config.title": "Git Branch Cleaner",
+  "config.title": "Git Souji",
   "config.baseBranch.description": "Base branch used for dead-branch detection. If 'auto', prefers origin/HEAD, then tries main/master/develop.",
   "config.protectedBranches.description": "Protected branches excluded from delete/detect/rename/merge-source actions. Supports glob patterns with *.",
   "config.confirmBeforeDelete.description": "Show confirmation dialog before destructive actions.",

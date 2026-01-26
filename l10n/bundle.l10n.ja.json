@@ -1,5 +1,5 @@
 {
-  "extension.displayName": "GitSouji - Branch Cleanup",
+  "extension.displayName": "Git Souji",
   "extension.description": "Git ブランチの整理に特化した VS Code 拡張です（デッド/古い/削除済みリモートのブランチ検出・削除、その他ブランチ管理機能）。",
 
   "command.openCleaner.title": "Git Souji: 開く",

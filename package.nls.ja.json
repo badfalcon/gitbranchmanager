@@ -1,10 +1,10 @@
 {
-  "extension.displayName": "Git Branch Cleaner",
+  "extension.displayName": "Git Souji",
   "extension.description": "Git ブランチの整理に特化した VS Code 拡張です（デッド/古い/削除済みリモートのブランチ検出・削除、その他ブランチ管理機能）。",
 
-  "command.openCleaner.title": "ブランチクリーナー: 開く",
+  "command.openCleaner.title": "Git Souji: 開く",
 
-  "config.title": "Git Branch Cleaner",
+  "config.title": "Git Souji",
   "config.baseBranch.description": "デッドブランチ検出の基準ブランチ。「auto」の場合は origin/HEAD を優先し、無ければ main/master/develop を順に探索します。",
   "config.protectedBranches.description": "保護ブランチ。削除/検出/リネーム/マージ元指定の対象外になります。* を使用した glob パターンに対応しています。",
   "config.confirmBeforeDelete.description": "削除など破壊的操作前に確認ダイアログを表示します。",

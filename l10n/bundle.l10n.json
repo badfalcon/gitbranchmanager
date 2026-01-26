@@ -1,5 +1,5 @@
 {
-  "extension.displayName": "GitSouji - Branch Cleanup",
+  "extension.displayName": "Git Souji",
   "extension.description": "A VS Code extension for cleaning up Git branches (detect and delete dead/stale/gone branches, with full branch management).",
 
   "command.openCleaner.title": "Git Souji: Open",
