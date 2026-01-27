@@ -19,7 +19,7 @@ npm run compile
 npm run watch
 
 # Lint TypeScript source files
-npm lint
+npm run lint
 
 # Run all tests (pretest runs lint + compile + tests)
 npm test
@@ -184,7 +184,13 @@ Tests are in [src/test/extension.test.ts](src/test/extension.test.ts) using Moch
 - `parseTrackShort()` - ahead/behind parsing
 - `escapeHtml()` - HTML entity escaping
 
-Run tests with `npm test` (auto-compiles and lints first).
+```bash
+# Run all tests (auto-compiles and lints first)
+npm test
+
+# Run specific test by pattern (requires compiled tests)
+npm run compile-tests && npx vscode-test --grep "isProtectedBranch"
+```
 
 ## Localization (i18n)
 
@@ -209,27 +215,3 @@ Run tests with `npm test` (auto-compiles and lints first).
 - **Repository detection**: Multi-folder workspace support with filtering for actual Git repos
 - **Checkout from remote**: If checking out `origin/feature`, automatically creates local tracking branch `feature`
 - **Mutex warnings in tests**: `vscode-test` may report "Error mutex already exists"; this is expected due to VS Code process contention and doesn't affect exit code
-
-## File Structure
-
-```
-gitsouji/
-├── src/
-│   ├── extension.ts           # Entry point, command registration
-│   ├── app.ts                 # Core logic (types, git ops, config, helpers)
-│   ├── webview/
-│   │   └── panel.ts           # Webview creation, message handling
-│   ├── git/
-│   │   └── gitRunner.ts       # Git command execution wrapper
-│   └── test/
-│       └── extension.test.ts   # Unit tests
-├── media/
-│   └── branchManager.html     # Webview UI (injected at runtime)
-├── l10n/
-│   ├── bundle.l10n.json       # English strings
-│   └── bundle.l10n.ja.json    # Japanese strings
-├── webpack.config.js          # Webpack build config
-├── tsconfig.json              # TypeScript config
-├── package.json               # Dependencies and scripts
-└── CLAUDE.md                  # This file
-```
