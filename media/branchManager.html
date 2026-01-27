@@ -83,35 +83,25 @@ code { font-family: var(--vscode-editor-font-family); }
     <button class="btn primary" id="cleanupAll"></button>
   </div>
 
+  <div class="search-bar">
+    <input type="text" id="searchInput" class="search-input" placeholder="" />
+    <label class="regex-toggle" id="caseToggle" title="">
+      <input type="checkbox" id="caseCheckbox" />
+      <span>Aa</span>
+    </label>
+    <label class="regex-toggle" id="regexToggle" title="">
+      <input type="checkbox" id="regexCheckbox" />
+      <span>.*</span>
+    </label>
+  </div>
+
   <div class="section">
     <h3 id="localTitle"></h3>
-    <div class="search-bar">
-      <input type="text" id="localSearch" class="search-input" placeholder="" />
-      <label class="regex-toggle" id="localCaseToggle" title="">
-        <input type="checkbox" id="localCase" />
-        <span>Aa</span>
-      </label>
-      <label class="regex-toggle" id="localRegexToggle" title="">
-        <input type="checkbox" id="localRegex" />
-        <span>.*</span>
-      </label>
-    </div>
     <table class="table" id="local"></table>
   </div>
 
   <div class="section">
     <h3 id="remoteTitle"></h3>
-    <div class="search-bar">
-      <input type="text" id="remoteSearch" class="search-input" placeholder="" />
-      <label class="regex-toggle" id="remoteCaseToggle" title="">
-        <input type="checkbox" id="remoteCase" />
-        <span>Aa</span>
-      </label>
-      <label class="regex-toggle" id="remoteRegexToggle" title="">
-        <input type="checkbox" id="remoteRegex" />
-        <span>.*</span>
-      </label>
-    </div>
     <div class="cleanup-toolbar" id="remoteCleanupToolbar">
       <span class="toolbar-label" id="remoteCleanupLabel"></span>
       <button class="btn" id="remoteCleanupMerged"></button>
@@ -162,13 +152,10 @@ code { font-family: var(--vscode-editor-font-family); }
     let localSort = { column: 'name', direction: 'asc' };
     let remoteSort = { column: 'name', direction: 'asc' };
 
-    // Search state
-    let localSearchQuery = '';
-    let remoteSearchQuery = '';
-    let localUseRegex = false;
-    let remoteUseRegex = false;
-    let localCaseSensitive = false;
-    let remoteCaseSensitive = false;
+    // Search state (unified for both tables)
+    let searchQuery = '';
+    let useRegex = false;
+    let caseSensitive = false;
 
     // Static labels
     $('refresh').textContent = I18N.refresh;
@@ -198,12 +185,9 @@ code { font-family: var(--vscode-editor-font-family); }
     $('previewExecute').textContent = I18N.previewExecute;
 
     // Search placeholders and tooltips
-    $('localSearch').placeholder = I18N.searchPlaceholder || 'Search branches...';
-    $('remoteSearch').placeholder = I18N.searchPlaceholder || 'Search branches...';
-    $('localCaseToggle').title = I18N.searchCaseSensitive || 'Match Case';
-    $('remoteCaseToggle').title = I18N.searchCaseSensitive || 'Match Case';
-    $('localRegexToggle').title = I18N.searchUseRegex || 'Use Regular Expression';
-    $('remoteRegexToggle').title = I18N.searchUseRegex || 'Use Regular Expression';
+    $('searchInput').placeholder = I18N.searchPlaceholder || 'Search branches...';
+    $('caseToggle').title = I18N.searchCaseSensitive || 'Match Case';
+    $('regexToggle').title = I18N.searchUseRegex || 'Use Regular Expression';
 
     // Event listeners
     $('refresh').addEventListener('click', () => vscode.postMessage({ type: 'refresh' }));
@@ -228,46 +212,29 @@ code { font-family: var(--vscode-editor-font-family); }
     $('previewCancel').addEventListener('click', closePreview);
     $('previewExecute').addEventListener('click', executeCleanup);
 
-    // Search event listeners
-    $('localSearch').addEventListener('input', (e) => {
-      localSearchQuery = e.target.value;
-      validateAndRender('local');
+    // Search event listeners (unified)
+    $('searchInput').addEventListener('input', (e) => {
+      searchQuery = e.target.value;
+      validateAndRender();
     });
-    $('localCase').addEventListener('change', (e) => {
-      localCaseSensitive = e.target.checked;
+    $('caseCheckbox').addEventListener('change', (e) => {
+      caseSensitive = e.target.checked;
       e.target.parentElement.classList.toggle('active', e.target.checked);
-      validateAndRender('local');
+      validateAndRender();
     });
-    $('localRegex').addEventListener('change', (e) => {
-      localUseRegex = e.target.checked;
+    $('regexCheckbox').addEventListener('change', (e) => {
+      useRegex = e.target.checked;
       e.target.parentElement.classList.toggle('active', e.target.checked);
-      validateAndRender('local');
-    });
-    $('remoteSearch').addEventListener('input', (e) => {
-      remoteSearchQuery = e.target.value;
-      validateAndRender('remote');
-    });
-    $('remoteCase').addEventListener('change', (e) => {
-      remoteCaseSensitive = e.target.checked;
-      e.target.parentElement.classList.toggle('active', e.target.checked);
-      validateAndRender('remote');
-    });
-    $('remoteRegex').addEventListener('change', (e) => {
-      remoteUseRegex = e.target.checked;
-      e.target.parentElement.classList.toggle('active', e.target.checked);
-      validateAndRender('remote');
+      validateAndRender();
     });
 
-    function validateAndRender(table) {
-      const input = $(table + 'Search');
-      const useRegex = table === 'local' ? localUseRegex : remoteUseRegex;
-      const caseSensitive = table === 'local' ? localCaseSensitive : remoteCaseSensitive;
-      const query = table === 'local' ? localSearchQuery : remoteSearchQuery;
+    function validateAndRender() {
+      const input = $('searchInput');
 
       // Validate regex if enabled
-      if (useRegex && query) {
+      if (useRegex && searchQuery) {
         try {
-          new RegExp(query, caseSensitive ? '' : 'i');
+          new RegExp(searchQuery, caseSensitive ? '' : 'i');
           input.classList.remove('error');
         } catch {
           input.classList.add('error');
@@ -372,7 +339,7 @@ code { font-family: var(--vscode-editor-font-family); }
 
     function renderLocal(rows, showBadges) {
       // Filter and sort the rows before rendering
-      const filteredRows = filterBranches(rows, localSearchQuery, localUseRegex, localCaseSensitive, false);
+      const filteredRows = filterBranches(rows, searchQuery, useRegex, caseSensitive, false);
       const sortedRows = sortBranches(filteredRows, localSort.column, localSort.direction, false);
 
       const selectColHtml = selectModeActive ? '<th class="select-col"></th>' : '';
@@ -442,7 +409,7 @@ code { font-family: var(--vscode-editor-font-family); }
 
     function renderRemote(rows, showBadges, allowRemoteDeletion) {
       // Filter and sort the rows before rendering
-      const filteredRows = filterBranches(rows, remoteSearchQuery, remoteUseRegex, remoteCaseSensitive, true);
+      const filteredRows = filterBranches(rows, searchQuery, useRegex, caseSensitive, true);
       const sortedRows = sortBranches(filteredRows, remoteSort.column, remoteSort.direction, true);
 
       // Only show select column if select mode is active AND remote deletion is allowed
