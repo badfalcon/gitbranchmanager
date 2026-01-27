@@ -86,7 +86,7 @@ Main TypeScript module containing:
 - **Local cleanup toolbar**: Merged/Stale/Gone/Cleanup All buttons
 - **Remote cleanup toolbar**: Merged/Stale/Cleanup All buttons (hidden when `allowRemoteBranchDeletion` is false)
 - **Select mode**: Toggle to show checkboxes for manual multi-select deletion
-- Preview modal for bulk deletion with checkbox selection
+- **Preview modal**: Bulk deletion preview with checkbox selection and sortable columns (Name, Status, Last Commit)
 - i18n strings injected at runtime as base64-encoded JSON
 
 ## Key Design Patterns
@@ -192,10 +192,17 @@ Two-way message flow between extension and webview:
 
 ## Testing
 
-Tests are in [src/test/extension.test.ts](src/test/extension.test.ts) using Mocha + Assert:
-- `isProtectedBranch()` - exact, prefix, glob matching
-- `parseTrackShort()` - ahead/behind parsing
-- `escapeHtml()` - HTML entity escaping
+Tests are in [src/test/extension.test.ts](src/test/extension.test.ts) using Mocha + Assert + Sinon:
+
+**Pure function tests (18 tests):**
+- `isProtectedBranch()` - exact, prefix, glob, case sensitivity, special chars
+- `parseTrackShort()` - ahead/behind parsing, edge cases
+- `escapeHtml()` - HTML entity escaping, XSS prevention
+- `simpleBranchNameValidator()` - invalid chars, patterns, edge cases
+
+**Git function tests with mocking (30 tests):**
+- Uses `sinon` to stub `runGit()` for isolated unit tests
+- Tests for: `listLocalBranches`, `listRemoteBranches`, `getCurrentBranch`, `checkoutBranch`, `createBranch`, `renameBranch`, `deleteLocalBranch`, `deleteRemoteBranch`, `mergeIntoCurrent`, `fetchWithPrune`, `resolveBaseBranch`, `getUpstreamMap`, `detectDeadBranches`, `detectGoneBranches`, `detectStaleBranches`, `detectMergedRemoteBranches`, `getBranchLastCommitDates`, `getRemoteBranchLastCommitDates`, `listLocalBranchesWithStatus`, `listRemoteBranchesWithStatus`
 
 ```bash
 # Run all tests (auto-compiles and lints first)
@@ -219,6 +226,13 @@ npm run compile-tests && npx vscode-test --grep "isProtectedBranch"
 - **Development**: `dist/extension.js` (webpack, source maps enabled)
 - **Production**: `dist/extension.js` (webpack, minified, hidden source maps)
 - TypeScript declaration files: `.d.ts` files (not bundled)
+
+## Documentation
+
+- **README.md** - Repository documentation (development-focused)
+- **STORE.md** - VS Code Marketplace description (user-focused, set via `package.json` `"readme"` field)
+- **CHANGELOG.md** - Version history
+- **CLAUDE.md** - This file (Claude Code context)
 
 ## Important Notes
 

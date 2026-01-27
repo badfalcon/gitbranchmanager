@@ -4,6 +4,18 @@ All notable changes to the "gitsouji" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [1.3.0] - 2026-01-27
+
+### Added
+
+- Sortable columns in cleanup preview modal (Name, Status, Last Commit)
+- Comprehensive unit tests with mocking (48 tests total)
+
+### Changed
+
+- Separated marketplace description (`STORE.md`) from repository README
+- Removed explicit `activationEvents` (auto-inferred by VS Code)
+
 ## [1.2.0] - 2026-01-27
 
 ### Added
