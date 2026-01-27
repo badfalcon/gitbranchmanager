@@ -156,6 +156,8 @@ code { font-family: var(--vscode-editor-font-family); }
     // Sort state for each table
     let localSort = { column: 'name', direction: 'asc' };
     let remoteSort = { column: 'name', direction: 'asc' };
+    let previewSort = { column: 'name', direction: 'asc' };
+    let previewCandidates = [];
 
     // Search state (unified for both tables)
     let searchQuery = '';
@@ -319,14 +321,24 @@ code { font-family: var(--vscode-editor-font-family); }
     }
 
     function toggleSort(table, column) {
-      const s = table === 'local' ? localSort : remoteSort;
+      let s;
+      if (table === 'local') s = localSort;
+      else if (table === 'remote') s = remoteSort;
+      else if (table === 'preview') s = previewSort;
+      else return;
+
       if (s.column === column) {
         s.direction = s.direction === 'asc' ? 'desc' : 'asc';
       } else {
         s.column = column;
         s.direction = 'asc';
       }
-      if (currentState) render(currentState);
+
+      if (table === 'preview') {
+        renderPreview(previewCandidates);
+      } else if (currentState) {
+        render(currentState);
+      }
     }
 
     function render(state) {
@@ -489,7 +501,7 @@ code { font-family: var(--vscode-editor-font-family); }
       cleanupMode = mode || 'local';
 
       const source = cleanupMode === 'remote' ? currentState.remotes : currentState.locals;
-      const candidates = source.filter(b => {
+      previewCandidates = source.filter(b => {
         if (b.protected) return false;
         if (cleanupMode === 'local' && b.isCurrent) return false;
         if (filter === 'merged') return b.isMerged;
@@ -502,10 +514,13 @@ code { font-family: var(--vscode-editor-font-family); }
         return false;
       });
 
+      // Reset sort to default when opening preview
+      previewSort = { column: 'name', direction: 'asc' };
+
       // Hide "include remote" option when cleaning remote branches
       $('includeRemote').parentElement.style.display = cleanupMode === 'remote' ? 'none' : '';
 
-      renderPreview(candidates);
+      renderPreview(previewCandidates);
       $('previewOverlay').style.display = 'block';
       $('previewPanel').style.display = 'block';
     }
@@ -522,15 +537,32 @@ code { font-family: var(--vscode-editor-font-family); }
 
       $('previewExecute').disabled = false;
 
-      const header = '<tr><th><input type="checkbox" id="selectAll" checked /></th><th>' + escapeHtml(I18N.localHeaderName) + '</th><th>' + escapeHtml(I18N.previewReasons) + '</th><th>' + escapeHtml(I18N.localHeaderLastCommit) + '</th></tr>';
+      // Sort the candidates
+      const isRemote = cleanupMode === 'remote';
+      const sortedCandidates = sortBranches(candidates, previewSort.column, previewSort.direction, isRemote);
+
+      // Build sortable header classes
+      const nameClass = 'sortable' + (previewSort.column === 'name' ? ' sort-' + previewSort.direction : '');
+      const statusClass = 'sortable' + (previewSort.column === 'status' ? ' sort-' + previewSort.direction : '');
+      const lastCommitClass = 'sortable' + (previewSort.column === 'lastCommit' ? ' sort-' + previewSort.direction : '');
+
+      const header = '<tr><th><input type="checkbox" id="selectAll" checked /></th>'
+        + '<th class="' + nameClass + '" data-sort="name" data-table="preview">' + escapeHtml(I18N.localHeaderName) + '</th>'
+        + '<th class="' + statusClass + '" data-sort="status" data-table="preview">' + escapeHtml(I18N.previewReasons) + '</th>'
+        + '<th class="' + lastCommitClass + '" data-sort="lastCommit" data-table="preview">' + escapeHtml(I18N.localHeaderLastCommit) + '</th></tr>';
       table.insertAdjacentHTML('beforeend', header);
+
+      // Add click listeners to sortable headers
+      table.querySelectorAll('.sortable').forEach(th => {
+        th.addEventListener('click', () => toggleSort(th.dataset.table, th.dataset.sort));
+      });
 
       $('selectAll').addEventListener('change', (e) => {
         const checkboxes = table.querySelectorAll('input[type="checkbox"][data-branch]');
         checkboxes.forEach(cb => cb.checked = e.target.checked);
       });
 
-      for (const b of candidates) {
+      for (const b of sortedCandidates) {
         const tr = document.createElement('tr');
 
         let reasons = [];
