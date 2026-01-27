@@ -79,9 +79,12 @@ Main TypeScript module containing:
 
 ### **Webview UI** ([media/branchManager.html](media/branchManager.html))
 - Static HTML with inline CSS/JavaScript
+- **Unified search bar**: Filter both local and remote branches with case sensitivity (Aa) and regex (.*) toggles
+- **Settings button**: Gear icon for quick access to extension settings
+- **Sortable columns**: Click headers to sort by Name, Status, or Last Commit
 - Tables for local and remote branches with status badges (merged/stale/gone)
 - **Local cleanup toolbar**: Merged/Stale/Gone/Cleanup All buttons
-- **Remote cleanup toolbar**: Merged/Stale/Cleanup All buttons
+- **Remote cleanup toolbar**: Merged/Stale/Cleanup All buttons (hidden when `allowRemoteBranchDeletion` is false)
 - **Select mode**: Toggle to show checkboxes for manual multi-select deletion
 - Preview modal for bulk deletion with checkbox selection
 - i18n strings injected at runtime as base64-encoded JSON
@@ -139,20 +142,29 @@ Main TypeScript module containing:
 
 ### Select Mode
 - Toggle "Select" button to enter select mode
-- Checkboxes appear on all branch rows (disabled for current/protected branches)
+- Checkboxes appear on selectable branch rows (hidden for current/protected branches)
 - Select branches from both local and remote tables simultaneously
 - Counter shows "X selected"
 - Click "Delete Selected" to bulk delete all selected branches
 
 ### Configuration Keys
-All settings are under `gitSouji.*`:
+All settings are under `gitSouji.*`, organized by category:
+
+**Detection:**
 - `baseBranch` (default: "auto") - base branch for merged detection
-- `protectedBranches` (default: ["main", "master", "develop"]) - protected branch patterns
-- `confirmBeforeDelete` (default: true) - show confirmation before destructive ops
-- `forceDeleteLocal` (default: false) - use `git branch -D` instead of `-d`
-- `includeRemoteInDeadCleanup` (default: false) - delete remote when cleaning dead local
 - `staleDays` (default: 30) - days threshold for stale detection
 - `autoFetchPrune` (default: false) - auto fetch with prune before gone detection
+
+**Protection:**
+- `protectedBranches` (default: ["main", "master", "develop"]) - protected branch patterns
+
+**Deletion:**
+- `confirmBeforeDelete` (default: true) - show confirmation before destructive ops
+- `forceDeleteLocal` (default: false) - use `git branch -D` instead of `-d`
+- `allowRemoteBranchDeletion` (default: false) - enable remote branch deletion UI
+- `includeRemoteInDeadCleanup` (default: false) - delete remote when cleaning dead local
+
+**Display:**
 - `showStatusBadges` (default: true) - show merged/stale/gone badges in branch list
 
 ## Webview Message Protocol
@@ -163,6 +175,7 @@ Two-way message flow between extension and webview:
 - `{ type: 'ready' }` - webview initialized
 - `{ type: 'refresh' }` - user requests refresh
 - `{ type: 'openLogTerminal'; ref: string }` - open git log in terminal
+- `{ type: 'openSettings' }` - open extension settings
 - `{ type: 'checkout'; name: string }` - switch branch
 - `{ type: 'create' }` - create new branch (prompts user)
 - `{ type: 'rename'; oldName: string }` - rename branch (prompts user)
@@ -174,7 +187,7 @@ Two-way message flow between extension and webview:
 - `{ type: 'deleteSelectedBranches'; localBranches: string[]; remoteBranches: string[] }` - delete selected branches from select mode
 
 **Extension → Webview (State)**:
-- `{ type: 'state'; state: { locals: BranchRow[]; remotes: BranchRow[]; current?: string; repoRoot: string; showStatusBadges?: boolean } }` - branch list with status
+- `{ type: 'state'; state: { locals: BranchRow[]; remotes: BranchRow[]; current?: string; repoRoot: string; showStatusBadges?: boolean; allowRemoteBranchDeletion?: boolean } }` - branch list with status
 - `{ type: 'error'; message: string }` - error notification
 
 ## Testing

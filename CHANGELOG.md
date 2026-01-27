@@ -4,6 +4,30 @@ All notable changes to the "gitsouji" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [1.2.0] - 2026-01-27
+
+### Added
+
+- Unified search bar for filtering both local and remote branches
+- Case sensitivity toggle (Aa) for branch search
+- Regex toggle (.*) for branch search with pattern matching
+- Settings button (gear icon) in toolbar for quick access to extension settings
+- `allowRemoteBranchDeletion` setting to control remote branch deletion UI
+
+### Changed
+
+- Reorganized settings with logical grouping and order
+- Tab name changed to "Git Souji" for consistency
+- Protected branches now hide checkboxes instead of showing disabled ones
+- Improved settings descriptions with markdown formatting
+
+## [1.1.0] - 2026-01-26
+
+### Added
+
+- Sortable columns for branch tables (Name, Status, Last Commit)
+- Configuration option `allowRemoteBranchDeletion` to control remote branch deletion
+
 ## [1.0.0] - 2026-01-19
 
 ### Added
