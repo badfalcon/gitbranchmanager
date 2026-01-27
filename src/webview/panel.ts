@@ -565,6 +565,11 @@ type WebviewI18n = {
   selectMode: string;
   deleteSelected: string;
   selectedCount: string;
+
+  // Search
+  searchPlaceholder: string;
+  searchCaseSensitive: string;
+  searchUseRegex: string;
 };
 
 function getWebviewI18n(): WebviewI18n {
@@ -625,6 +630,11 @@ function getWebviewI18n(): WebviewI18n {
     selectMode: vscode.l10n.t('Select'),
     deleteSelected: vscode.l10n.t('Delete Selected'),
     selectedCount: vscode.l10n.t('{0} selected'),
+
+    // Search
+    searchPlaceholder: vscode.l10n.t('Search branches...'),
+    searchCaseSensitive: vscode.l10n.t('Match Case'),
+    searchUseRegex: vscode.l10n.t('Use Regular Expression'),
   };
 }
 

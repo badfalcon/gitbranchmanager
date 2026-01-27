@@ -50,6 +50,16 @@ code { font-family: var(--vscode-editor-font-family); }
 .sortable.sort-asc::after { border-bottom-color: var(--vscode-foreground); border-top: none; opacity: 1; }
 .sortable.sort-desc::after { border-top-color: var(--vscode-foreground); border-bottom: none; opacity: 1; }
 .sortable:not(.sort-asc):not(.sort-desc):hover::after { border-bottom-color: var(--vscode-foreground); opacity: 0.5; }
+
+/* Search bar */
+.search-bar { display: flex; gap: 8px; align-items: center; margin: 8px 0; max-width: 400px; }
+.search-input { flex: 1; padding: 4px 8px; font-size: 12px; border: 1px solid var(--vscode-input-border, var(--vscode-editorGroup-border)); background: var(--vscode-input-background); color: var(--vscode-input-foreground); border-radius: 4px; outline: none; }
+.search-input:focus { border-color: var(--vscode-focusBorder); }
+.search-input.error { border-color: var(--vscode-errorForeground); }
+.regex-toggle { display: flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer; user-select: none; padding: 2px 6px; border-radius: 4px; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: 1px solid transparent; }
+.regex-toggle:hover { background: var(--vscode-button-secondaryHoverBackground); }
+.regex-toggle input { display: none; }
+.regex-toggle.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-focusBorder); }
 </style>
 </head>
 <body>
@@ -75,11 +85,33 @@ code { font-family: var(--vscode-editor-font-family); }
 
   <div class="section">
     <h3 id="localTitle"></h3>
+    <div class="search-bar">
+      <input type="text" id="localSearch" class="search-input" placeholder="" />
+      <label class="regex-toggle" id="localCaseToggle" title="">
+        <input type="checkbox" id="localCase" />
+        <span>Aa</span>
+      </label>
+      <label class="regex-toggle" id="localRegexToggle" title="">
+        <input type="checkbox" id="localRegex" />
+        <span>.*</span>
+      </label>
+    </div>
     <table class="table" id="local"></table>
   </div>
 
   <div class="section">
     <h3 id="remoteTitle"></h3>
+    <div class="search-bar">
+      <input type="text" id="remoteSearch" class="search-input" placeholder="" />
+      <label class="regex-toggle" id="remoteCaseToggle" title="">
+        <input type="checkbox" id="remoteCase" />
+        <span>Aa</span>
+      </label>
+      <label class="regex-toggle" id="remoteRegexToggle" title="">
+        <input type="checkbox" id="remoteRegex" />
+        <span>.*</span>
+      </label>
+    </div>
     <div class="cleanup-toolbar" id="remoteCleanupToolbar">
       <span class="toolbar-label" id="remoteCleanupLabel"></span>
       <button class="btn" id="remoteCleanupMerged"></button>
@@ -130,6 +162,14 @@ code { font-family: var(--vscode-editor-font-family); }
     let localSort = { column: 'name', direction: 'asc' };
     let remoteSort = { column: 'name', direction: 'asc' };
 
+    // Search state
+    let localSearchQuery = '';
+    let remoteSearchQuery = '';
+    let localUseRegex = false;
+    let remoteUseRegex = false;
+    let localCaseSensitive = false;
+    let remoteCaseSensitive = false;
+
     // Static labels
     $('refresh').textContent = I18N.refresh;
     $('create').textContent = I18N.create;
@@ -157,6 +197,14 @@ code { font-family: var(--vscode-editor-font-family); }
     $('previewCancel').textContent = I18N.previewCancel;
     $('previewExecute').textContent = I18N.previewExecute;
 
+    // Search placeholders and tooltips
+    $('localSearch').placeholder = I18N.searchPlaceholder || 'Search branches...';
+    $('remoteSearch').placeholder = I18N.searchPlaceholder || 'Search branches...';
+    $('localCaseToggle').title = I18N.searchCaseSensitive || 'Match Case';
+    $('remoteCaseToggle').title = I18N.searchCaseSensitive || 'Match Case';
+    $('localRegexToggle').title = I18N.searchUseRegex || 'Use Regular Expression';
+    $('remoteRegexToggle').title = I18N.searchUseRegex || 'Use Regular Expression';
+
     // Event listeners
     $('refresh').addEventListener('click', () => vscode.postMessage({ type: 'refresh' }));
     $('create').addEventListener('click', () => vscode.postMessage({ type: 'create' }));
@@ -179,6 +227,58 @@ code { font-family: var(--vscode-editor-font-family); }
     $('previewOverlay').addEventListener('click', closePreview);
     $('previewCancel').addEventListener('click', closePreview);
     $('previewExecute').addEventListener('click', executeCleanup);
+
+    // Search event listeners
+    $('localSearch').addEventListener('input', (e) => {
+      localSearchQuery = e.target.value;
+      validateAndRender('local');
+    });
+    $('localCase').addEventListener('change', (e) => {
+      localCaseSensitive = e.target.checked;
+      e.target.parentElement.classList.toggle('active', e.target.checked);
+      validateAndRender('local');
+    });
+    $('localRegex').addEventListener('change', (e) => {
+      localUseRegex = e.target.checked;
+      e.target.parentElement.classList.toggle('active', e.target.checked);
+      validateAndRender('local');
+    });
+    $('remoteSearch').addEventListener('input', (e) => {
+      remoteSearchQuery = e.target.value;
+      validateAndRender('remote');
+    });
+    $('remoteCase').addEventListener('change', (e) => {
+      remoteCaseSensitive = e.target.checked;
+      e.target.parentElement.classList.toggle('active', e.target.checked);
+      validateAndRender('remote');
+    });
+    $('remoteRegex').addEventListener('change', (e) => {
+      remoteUseRegex = e.target.checked;
+      e.target.parentElement.classList.toggle('active', e.target.checked);
+      validateAndRender('remote');
+    });
+
+    function validateAndRender(table) {
+      const input = $(table + 'Search');
+      const useRegex = table === 'local' ? localUseRegex : remoteUseRegex;
+      const caseSensitive = table === 'local' ? localCaseSensitive : remoteCaseSensitive;
+      const query = table === 'local' ? localSearchQuery : remoteSearchQuery;
+
+      // Validate regex if enabled
+      if (useRegex && query) {
+        try {
+          new RegExp(query, caseSensitive ? '' : 'i');
+          input.classList.remove('error');
+        } catch {
+          input.classList.add('error');
+          return; // Don't re-render with invalid regex
+        }
+      } else {
+        input.classList.remove('error');
+      }
+
+      if (currentState) render(currentState);
+    }
 
     window.addEventListener('message', (e) => {
       const msg = e.data;
@@ -216,6 +316,34 @@ code { font-family: var(--vscode-editor-font-family); }
       });
     }
 
+    function filterBranches(branches, query, useRegex, caseSensitive, isRemote) {
+      if (!query) return branches;
+      try {
+        if (useRegex) {
+          const re = new RegExp(query, caseSensitive ? '' : 'i');
+          return branches.filter(b => {
+            const name = isRemote ? b.short.split('/').slice(1).join('/') : b.short;
+            return re.test(name);
+          });
+        } else {
+          if (caseSensitive) {
+            return branches.filter(b => {
+              const name = isRemote ? b.short.split('/').slice(1).join('/') : b.short;
+              return name.includes(query);
+            });
+          } else {
+            const lowerQuery = query.toLowerCase();
+            return branches.filter(b => {
+              const name = isRemote ? b.short.split('/').slice(1).join('/') : b.short;
+              return name.toLowerCase().includes(lowerQuery);
+            });
+          }
+        }
+      } catch {
+        return branches; // Return all if regex is invalid
+      }
+    }
+
     function toggleSort(table, column) {
       const s = table === 'local' ? localSort : remoteSort;
       if (s.column === column) {
@@ -243,8 +371,9 @@ code { font-family: var(--vscode-editor-font-family); }
     }
 
     function renderLocal(rows, showBadges) {
-      // Sort the rows before rendering
-      const sortedRows = sortBranches(rows, localSort.column, localSort.direction, false);
+      // Filter and sort the rows before rendering
+      const filteredRows = filterBranches(rows, localSearchQuery, localUseRegex, localCaseSensitive, false);
+      const sortedRows = sortBranches(filteredRows, localSort.column, localSort.direction, false);
 
       const selectColHtml = selectModeActive ? '<th class="select-col"></th>' : '';
       const nameClass = 'sortable' + (localSort.column === 'name' ? ' sort-' + localSort.direction : '');
@@ -312,8 +441,9 @@ code { font-family: var(--vscode-editor-font-family); }
     }
 
     function renderRemote(rows, showBadges, allowRemoteDeletion) {
-      // Sort the rows before rendering
-      const sortedRows = sortBranches(rows, remoteSort.column, remoteSort.direction, true);
+      // Filter and sort the rows before rendering
+      const filteredRows = filterBranches(rows, remoteSearchQuery, remoteUseRegex, remoteCaseSensitive, true);
+      const sortedRows = sortBranches(filteredRows, remoteSort.column, remoteSort.direction, true);
 
       // Only show select column if select mode is active AND remote deletion is allowed
       const selectColHtml = (selectModeActive && allowRemoteDeletion) ? '<th class="select-col"></th>' : '';

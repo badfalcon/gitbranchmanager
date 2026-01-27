@@ -105,5 +105,8 @@
   "Delete {0} selected branches?": "Delete {0} selected branches?",
   "Select": "Select",
   "{0} selected": "{0} selected",
-  "Also delete {0} remote branches with same name (not tracked)?": "Also delete {0} remote branches with same name (not tracked)?"
+  "Also delete {0} remote branches with same name (not tracked)?": "Also delete {0} remote branches with same name (not tracked)?",
+  "Search branches...": "Search branches...",
+  "Match Case": "Match Case",
+  "Use Regular Expression": "Use Regular Expression"
 }
