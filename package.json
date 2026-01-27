@@ -48,51 +48,60 @@
       "title": "%config.title%",
       "properties": {
         "gitSouji.baseBranch": {
+          "order": 1,
           "type": "string",
           "default": "auto",
-          "description": "%config.baseBranch.description%"
-        },
-        "gitSouji.protectedBranches": {
-          "type": "array",
-          "items": { "type": "string" },
-          "default": ["main", "master", "develop"],
-          "description": "%config.protectedBranches.description%"
-        },
-        "gitSouji.confirmBeforeDelete": {
-          "type": "boolean",
-          "default": true,
-          "description": "%config.confirmBeforeDelete.description%"
-        },
-        "gitSouji.forceDeleteLocal": {
-          "type": "boolean",
-          "default": false,
-          "description": "%config.forceDeleteLocal.description%"
-        },
-        "gitSouji.includeRemoteInDeadCleanup": {
-          "type": "boolean",
-          "default": false,
-          "description": "%config.includeRemoteInDeadCleanup.description%"
+          "markdownDescription": "%config.baseBranch.description%"
         },
         "gitSouji.staleDays": {
+          "order": 2,
           "type": "number",
           "default": 30,
           "minimum": 1,
           "description": "%config.staleDays.description%"
         },
         "gitSouji.autoFetchPrune": {
+          "order": 3,
           "type": "boolean",
           "default": false,
-          "description": "%config.autoFetchPrune.description%"
+          "markdownDescription": "%config.autoFetchPrune.description%"
         },
-        "gitSouji.showStatusBadges": {
+        "gitSouji.protectedBranches": {
+          "order": 10,
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["main", "master", "develop"],
+          "markdownDescription": "%config.protectedBranches.description%"
+        },
+        "gitSouji.confirmBeforeDelete": {
+          "order": 20,
           "type": "boolean",
           "default": true,
-          "description": "%config.showStatusBadges.description%"
+          "description": "%config.confirmBeforeDelete.description%"
+        },
+        "gitSouji.forceDeleteLocal": {
+          "order": 21,
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.forceDeleteLocal.description%"
         },
         "gitSouji.allowRemoteBranchDeletion": {
+          "order": 22,
           "type": "boolean",
           "default": false,
           "description": "%config.allowRemoteBranchDeletion.description%"
+        },
+        "gitSouji.includeRemoteInDeadCleanup": {
+          "order": 23,
+          "type": "boolean",
+          "default": false,
+          "description": "%config.includeRemoteInDeadCleanup.description%"
+        },
+        "gitSouji.showStatusBadges": {
+          "order": 30,
+          "type": "boolean",
+          "default": true,
+          "description": "%config.showStatusBadges.description%"
         }
       }
     },

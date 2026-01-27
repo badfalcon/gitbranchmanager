@@ -5,15 +5,19 @@
   "command.openCleaner.title": "Git Souji: Open",
 
   "config.title": "Git Souji",
-  "config.baseBranch.description": "Base branch used for dead-branch detection. If 'auto', prefers origin/HEAD, then tries main/master/develop.",
-  "config.protectedBranches.description": "Protected branches excluded from delete/detect/rename/merge-source actions. Supports glob patterns with *.",
-  "config.confirmBeforeDelete.description": "Show confirmation dialog before destructive actions.",
-  "config.forceDeleteLocal.description": "Force delete local branches (git branch -D).",
-  "config.includeRemoteInDeadCleanup.description": "When bulk deleting dead branches, also try to delete corresponding remote branches.",
+
+  "config.baseBranch.description": "Base branch for merged-branch detection. Set to `auto` to use `origin/HEAD`, or fallback to `main` / `master` / `develop`.",
   "config.staleDays.description": "Number of days since last commit to consider a branch as stale.",
-  "config.autoFetchPrune.description": "Automatically run 'git fetch --prune' before detecting gone branches.",
-  "config.showStatusBadges.description": "Show status badges (merged/stale/gone) in the branch list.",
-  "config.allowRemoteBranchDeletion.description": "Allow deletion of remote branches. When disabled, remote branch deletion buttons are hidden.",
+  "config.autoFetchPrune.description": "Run `git fetch --prune` automatically before detecting gone branches.",
+
+  "config.protectedBranches.description": "Branches excluded from delete, rename, and merge-source actions. Supports glob patterns (e.g., `release/*`).",
+
+  "config.confirmBeforeDelete.description": "Show confirmation dialog before delete operations.",
+  "config.forceDeleteLocal.description": "Use `git branch -D` (force) instead of `git branch -d` when deleting local branches.",
+  "config.allowRemoteBranchDeletion.description": "Enable remote branch deletion buttons and cleanup.",
+  "config.includeRemoteInDeadCleanup.description": "Also delete corresponding remote branches when cleaning up local branches.",
+
+  "config.showStatusBadges.description": "Show merged/stale/gone status badges in the branch list.",
 
   "Git Branch Cleaner activated": "Git Branch Cleaner activated",
   "No Git repository found. Open a folder or initialize Git.": "No Git repository found. Open a folder or initialize Git.",

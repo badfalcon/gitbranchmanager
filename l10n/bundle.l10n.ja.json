@@ -5,15 +5,19 @@
   "command.openCleaner.title": "Git Souji: 開く",
 
   "config.title": "Git Souji",
-  "config.baseBranch.description": "デッドブランチ検出の基準ブランチ。「auto」の場合は origin/HEAD を優先し、無ければ main/master/develop を順に探索します。",
-  "config.protectedBranches.description": "保護ブランチ。削除/検出/リネーム/マージ元指定の対象外になります。* を使用した glob パターンに対応しています。",
-  "config.confirmBeforeDelete.description": "削除など破壊的操作前に確認ダイアログを表示します。",
-  "config.forceDeleteLocal.description": "ローカル削除を強制します (git branch -D)。",
-  "config.includeRemoteInDeadCleanup.description": "デッドブランチ一括削除時に、対応する追跡リモートがある場合はリモート削除も試行します。",
+
+  "config.baseBranch.description": "マージ済みブランチ検出の基準ブランチ。`auto` の場合は `origin/HEAD` を使用し、無ければ `main` / `master` / `develop` の順に探索します。",
   "config.staleDays.description": "最終コミットから何日経過したブランチを「古い」と見なすか。",
-  "config.autoFetchPrune.description": "Gone ブランチ検出前に自動で 'git fetch --prune' を実行します。",
-  "config.showStatusBadges.description": "ブランチ一覧にステータスバッジ（マージ済み/古い/削除済み）を表示します。",
-  "config.allowRemoteBranchDeletion.description": "リモートブランチの削除を許可します。無効の場合、リモートブランチ削除ボタンが非表示になります。",
+  "config.autoFetchPrune.description": "Gone ブランチ検出前に `git fetch --prune` を自動実行します。",
+
+  "config.protectedBranches.description": "削除・リネーム・マージ元指定の対象外とするブランチ。glob パターン対応（例: `release/*`）。",
+
+  "config.confirmBeforeDelete.description": "削除操作前に確認ダイアログを表示します。",
+  "config.forceDeleteLocal.description": "ローカルブランチ削除時に `git branch -d` ではなく `git branch -D`（強制）を使用します。",
+  "config.allowRemoteBranchDeletion.description": "リモートブランチの削除ボタンと整理機能を有効にします。",
+  "config.includeRemoteInDeadCleanup.description": "ローカルブランチ整理時に、対応するリモートブランチも削除します。",
+
+  "config.showStatusBadges.description": "ブランチ一覧にマージ済み/古い/削除済みのステータスバッジを表示します。",
 
   "Git Branch Cleaner activated": "Git Branch Cleaner が有効化されました",
   "No Git repository found. Open a folder or initialize Git.": "Git リポジトリが見つかりません。フォルダを開くか Git を初期化してください。",
