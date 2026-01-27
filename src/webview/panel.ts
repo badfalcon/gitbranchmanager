@@ -111,6 +111,10 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
             await openLogInTerminal(repo.repoRoot, msg.ref);
             break;
 
+          case 'openSettings':
+            await vscode.commands.executeCommand('workbench.action.openSettings', 'gitSouji');
+            break;
+
           case 'checkout':
             await checkoutBranch(repo.repoRoot, msg.name);
             await refresh();
@@ -570,6 +574,9 @@ type WebviewI18n = {
   searchPlaceholder: string;
   searchCaseSensitive: string;
   searchUseRegex: string;
+
+  // Settings
+  openSettings: string;
 };
 
 function getWebviewI18n(): WebviewI18n {
@@ -635,6 +642,9 @@ function getWebviewI18n(): WebviewI18n {
     searchPlaceholder: vscode.l10n.t('Search branches...'),
     searchCaseSensitive: vscode.l10n.t('Match Case'),
     searchUseRegex: vscode.l10n.t('Use Regular Expression'),
+
+    // Settings
+    openSettings: vscode.l10n.t('Settings'),
   };
 }
 

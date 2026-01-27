@@ -28,8 +28,11 @@ code { font-family: var(--vscode-editor-font-family); }
 .select-col { width: 30px; }
 .select-col input { cursor: pointer; }
 .hidden { display: none !important; }
-.select-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.select-actions { display: flex; gap: 8px; align-items: center; }
 .select-count { font-size: 12px; color: var(--vscode-descriptionForeground); }
+.toolbar-spacer { flex: 1; }
+.btn-icon { padding: 4px 6px; font-size: 16px; display: flex; align-items: center; justify-content: center; }
+.btn-icon svg { width: 16px; height: 16px; fill: currentColor; }
 
 /* Preview Modal */
 .preview-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 99; display: none; }
@@ -73,6 +76,8 @@ code { font-family: var(--vscode-editor-font-family); }
       <span class="select-count" id="selectCount"></span>
       <button class="btn danger" id="deleteSelected"></button>
     </div>
+    <div class="toolbar-spacer"></div>
+    <button class="btn btn-icon" id="openSettings" title=""><svg viewBox="0 0 16 16"><path d="M9.1 4.4L8.6 2H7.4l-.5 2.4-.7.3-2-1.3-.9.8 1.3 2-.2.7-2.4.5v1.2l2.4.5.3.8-1.3 2 .8.8 2-1.3.8.3.4 2.3h1.2l.5-2.4.8-.3 2 1.3.8-.8-1.3-2 .3-.8 2.3-.4V7.4l-2.4-.5-.3-.8 1.3-2-.8-.8-2 1.3-.7-.2zM9.4 1l.5 2.4L12 2.1l2 2-1.4 2.1 2.4.4v2.8l-2.4.5L14 12l-2 2-2.1-1.4-.5 2.4H6.6l-.5-2.4L4 13.9l-2-2 1.4-2.1L1 9.4V6.6l2.4-.5L2.1 4l2-2 2.1 1.4.4-2.4h2.8zm.6 7a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm1 0a3 3 0 1 0-6 0 3 3 0 0 0 6 0z"/></svg></button>
   </div>
 
   <div class="cleanup-toolbar">
@@ -188,12 +193,14 @@ code { font-family: var(--vscode-editor-font-family); }
     $('searchInput').placeholder = I18N.searchPlaceholder || 'Search branches...';
     $('caseToggle').title = I18N.searchCaseSensitive || 'Match Case';
     $('regexToggle').title = I18N.searchUseRegex || 'Use Regular Expression';
+    $('openSettings').title = I18N.openSettings || 'Settings';
 
     // Event listeners
     $('refresh').addEventListener('click', () => vscode.postMessage({ type: 'refresh' }));
     $('create').addEventListener('click', () => vscode.postMessage({ type: 'create' }));
     $('selectMode').addEventListener('click', toggleSelectMode);
     $('deleteSelected').addEventListener('click', deleteSelectedBranches);
+    $('openSettings').addEventListener('click', () => vscode.postMessage({ type: 'openSettings' }));
 
     // Local cleanup buttons
     $('cleanupMerged').addEventListener('click', () => showCleanupPreview('merged', 'local'));

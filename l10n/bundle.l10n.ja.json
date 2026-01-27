@@ -108,5 +108,6 @@
   "Also delete {0} remote branches with same name (not tracked)?": "同名のリモートブランチ（未追跡）も {0} 件削除しますか？",
   "Search branches...": "ブランチを検索...",
   "Match Case": "大文字/小文字を区別",
-  "Use Regular Expression": "正規表現を使用"
+  "Use Regular Expression": "正規表現を使用",
+  "Settings": "設定"
 }

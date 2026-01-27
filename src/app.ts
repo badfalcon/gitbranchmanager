@@ -44,6 +44,7 @@ export type WebviewMessage =
   | { type: 'ready' }
   | { type: 'refresh' }
   | { type: 'openLogTerminal'; ref: string }
+  | { type: 'openSettings' }
   | { type: 'checkout'; name: string }
   | { type: 'create' }
   | { type: 'rename'; oldName: string }
