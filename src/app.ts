@@ -73,6 +73,7 @@ export type ExtensionConfig = {
   staleDays: number;
   autoFetchPrune: boolean;
   showStatusBadges: boolean;
+  allowRemoteBranchDeletion: boolean;
 };
 
 export function getCfg(): ExtensionConfig {
@@ -87,6 +88,7 @@ export function getCfg(): ExtensionConfig {
     staleDays: cfg.get<number>('staleDays', 30),
     autoFetchPrune: cfg.get<boolean>('autoFetchPrune', false),
     showStatusBadges: cfg.get<boolean>('showStatusBadges', true),
+    allowRemoteBranchDeletion: cfg.get<boolean>('allowRemoteBranchDeletion', false),
   };
 }
 

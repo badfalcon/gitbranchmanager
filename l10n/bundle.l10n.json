@@ -13,6 +13,7 @@
   "config.staleDays.description": "Number of days since last commit to consider a branch as stale.",
   "config.autoFetchPrune.description": "Automatically run 'git fetch --prune' before detecting gone branches.",
   "config.showStatusBadges.description": "Show status badges (merged/stale/gone) in the branch list.",
+  "config.allowRemoteBranchDeletion.description": "Allow deletion of remote branches. When disabled, remote branch deletion buttons are hidden.",
 
   "Git Branch Cleaner activated": "Git Branch Cleaner activated",
   "No Git repository found. Open a folder or initialize Git.": "No Git repository found. Open a folder or initialize Git.",

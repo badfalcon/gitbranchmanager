@@ -31,6 +31,7 @@ type State = {
   baseBranch?: string;
   staleDays?: number;
   showStatusBadges?: boolean;
+  allowRemoteBranchDeletion?: boolean;
 };
 
 async function getState(repoRoot: string): Promise<State> {
@@ -68,6 +69,7 @@ async function getState(repoRoot: string): Promise<State> {
     baseBranch,
     staleDays: cfg.staleDays,
     showStatusBadges: cfg.showStatusBadges,
+    allowRemoteBranchDeletion: cfg.allowRemoteBranchDeletion,
   };
 }
 

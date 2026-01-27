@@ -13,6 +13,7 @@
   "config.staleDays.description": "最終コミットから何日経過したブランチを「古い」と見なすか。",
   "config.autoFetchPrune.description": "Gone ブランチ検出前に自動で 'git fetch --prune' を実行します。",
   "config.showStatusBadges.description": "ブランチ一覧にステータスバッジ（マージ済み/古い/削除済み）を表示します。",
+  "config.allowRemoteBranchDeletion.description": "リモートブランチの削除を許可します。無効の場合、リモートブランチ削除ボタンが非表示になります。",
 
   "Git Branch Cleaner activated": "Git Branch Cleaner が有効化されました",
   "No Git repository found. Open a folder or initialize Git.": "Git リポジトリが見つかりません。フォルダを開くか Git を初期化してください。",

@@ -80,7 +80,7 @@ code { font-family: var(--vscode-editor-font-family); }
 
   <div class="section">
     <h3 id="remoteTitle"></h3>
-    <div class="cleanup-toolbar">
+    <div class="cleanup-toolbar" id="remoteCleanupToolbar">
       <span class="toolbar-label" id="remoteCleanupLabel"></span>
       <button class="btn" id="remoteCleanupMerged"></button>
       <button class="btn" id="remoteCleanupStale"></button>
@@ -232,8 +232,14 @@ code { font-family: var(--vscode-editor-font-family); }
       localEl.innerHTML = '';
       remoteEl.innerHTML = '';
       renderLocal(state.locals, state.showStatusBadges);
-      renderRemote(state.remotes, state.showStatusBadges);
+      renderRemote(state.remotes, state.showStatusBadges, state.allowRemoteBranchDeletion);
       updateSelectCount();
+
+      // Hide remote cleanup toolbar if remote branch deletion is not allowed
+      const remoteToolbar = $('remoteCleanupToolbar');
+      if (remoteToolbar) {
+        remoteToolbar.style.display = state.allowRemoteBranchDeletion ? '' : 'none';
+      }
     }
 
     function renderLocal(rows, showBadges) {
@@ -305,11 +311,12 @@ code { font-family: var(--vscode-editor-font-family); }
       }
     }
 
-    function renderRemote(rows, showBadges) {
+    function renderRemote(rows, showBadges, allowRemoteDeletion) {
       // Sort the rows before rendering
       const sortedRows = sortBranches(rows, remoteSort.column, remoteSort.direction, true);
 
-      const selectColHtml = selectModeActive ? '<th class="select-col"></th>' : '';
+      // Only show select column if select mode is active AND remote deletion is allowed
+      const selectColHtml = (selectModeActive && allowRemoteDeletion) ? '<th class="select-col"></th>' : '';
       const nameClass = 'sortable' + (remoteSort.column === 'name' ? ' sort-' + remoteSort.direction : '');
       const statusClass = 'sortable' + (remoteSort.column === 'status' ? ' sort-' + remoteSort.direction : '');
       const lastCommitClass = 'sortable' + (remoteSort.column === 'lastCommit' ? ' sort-' + remoteSort.direction : '');
@@ -345,9 +352,9 @@ code { font-family: var(--vscode-editor-font-family); }
           lastCommitHtml = '<span class="last-commit">' + escapeHtml(I18N.daysAgo.replace('{0}', r.lastCommitAgeInDays)) + '</span>';
         }
 
-        // Checkbox for select mode (disabled for protected)
-        const canSelect = !r.protected;
-        const checkboxHtml = selectModeActive
+        // Checkbox for select mode (disabled for protected, only if remote deletion allowed)
+        const canSelect = !r.protected && allowRemoteDeletion;
+        const checkboxHtml = (selectModeActive && allowRemoteDeletion)
           ? '<td class="select-col"><input type="checkbox" data-remote="' + escapeHtml(r.short) + '"' + (canSelect ? '' : ' disabled') + ' onchange="updateSelectCount()" /></td>'
           : '';
 
@@ -360,7 +367,7 @@ code { font-family: var(--vscode-editor-font-family); }
         const actions = tr.querySelector('.actions');
         actions.appendChild(btn(I18N.actionCheckout, () => vscode.postMessage({ type: 'checkout', name: r.short })));
         actions.appendChild(btn(I18N.actionLog, () => vscode.postMessage({ type: 'openLogTerminal', ref: r.short })));
-        if (!r.protected) {
+        if (!r.protected && allowRemoteDeletion) {
           actions.appendChild(btn(I18N.actionDeleteRemote, () => vscode.postMessage({ type: 'deleteRemote', remote, name })));
         }
         remoteEl.appendChild(tr);
