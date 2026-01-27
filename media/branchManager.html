@@ -378,11 +378,14 @@ code { font-family: var(--vscode-editor-font-family); }
           lastCommitHtml = '<span class="last-commit">' + escapeHtml(I18N.daysAgo.replace('{0}', r.lastCommitAgeInDays)) + '</span>';
         }
 
-        // Checkbox for select mode (disabled for current branch and protected)
+        // Checkbox for select mode (hidden for current branch and protected)
         const canSelect = !r.isCurrent && !r.protected;
-        const checkboxHtml = selectModeActive
-          ? '<td class="select-col"><input type="checkbox" data-local="' + escapeHtml(r.short) + '"' + (canSelect ? '' : ' disabled') + ' onchange="updateSelectCount()" /></td>'
-          : '';
+        let checkboxHtml = '';
+        if (selectModeActive) {
+          checkboxHtml = canSelect
+            ? '<td class="select-col"><input type="checkbox" data-local="' + escapeHtml(r.short) + '" onchange="updateSelectCount()" /></td>'
+            : '<td class="select-col"></td>';
+        }
 
         const tr = document.createElement('tr');
         tr.innerHTML = checkboxHtml + '<td>' + cur + '</td>'
@@ -449,11 +452,14 @@ code { font-family: var(--vscode-editor-font-family); }
           lastCommitHtml = '<span class="last-commit">' + escapeHtml(I18N.daysAgo.replace('{0}', r.lastCommitAgeInDays)) + '</span>';
         }
 
-        // Checkbox for select mode (disabled for protected, only if remote deletion allowed)
+        // Checkbox for select mode (hidden for protected)
         const canSelect = !r.protected && allowRemoteDeletion;
-        const checkboxHtml = (selectModeActive && allowRemoteDeletion)
-          ? '<td class="select-col"><input type="checkbox" data-remote="' + escapeHtml(r.short) + '"' + (canSelect ? '' : ' disabled') + ' onchange="updateSelectCount()" /></td>'
-          : '';
+        let checkboxHtml = '';
+        if (selectModeActive && allowRemoteDeletion) {
+          checkboxHtml = canSelect
+            ? '<td class="select-col"><input type="checkbox" data-remote="' + escapeHtml(r.short) + '" onchange="updateSelectCount()" /></td>'
+            : '<td class="select-col"></td>';
+        }
 
         const tr = document.createElement('tr');
         tr.innerHTML = checkboxHtml + '<td>' + escapeHtml(remote) + '</td>'
