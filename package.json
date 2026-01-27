@@ -5,6 +5,7 @@
   "version": "1.2.0",
   "publisher": "badfalcon",
   "license": "MIT",
+  "readme": "STORE.md",
   "repository": {
     "type": "git",
     "url": "https://github.com/badfalcon/gitbranchcleaner.git"
