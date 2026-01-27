@@ -76,7 +76,7 @@ async function getState(repoRoot: string): Promise<State> {
 export async function openManagerPanel(context: vscode.ExtensionContext, repo: RepoContext) {
   const panel = vscode.window.createWebviewPanel(
     'gitBranchCleaner',
-    vscode.l10n.t('Branch Cleaner'),
+    'Git Souji',
     vscode.ViewColumn.Active,
     {
       enableScripts: true,
