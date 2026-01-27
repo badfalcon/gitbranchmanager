@@ -12,5 +12,6 @@
   "config.includeRemoteInDeadCleanup.description": "デッドブランチ一括削除時に、対応する追跡リモートがある場合はリモート削除も試行します。",
   "config.staleDays.description": "最終コミットから何日経過したブランチを「古い」と見なすか。",
   "config.autoFetchPrune.description": "Gone ブランチ検出前に自動で 'git fetch --prune' を実行します。",
-  "config.showStatusBadges.description": "ブランチ一覧にステータスバッジ（マージ済み/古い/削除済み）を表示します。"
+  "config.showStatusBadges.description": "ブランチ一覧にステータスバッジ（マージ済み/古い/削除済み）を表示します。",
+  "config.allowRemoteBranchDeletion.description": "リモートブランチの削除を許可します。無効の場合、リモートブランチ削除ボタンが非表示になります。"
 }
