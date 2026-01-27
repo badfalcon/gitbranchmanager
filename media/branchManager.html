@@ -42,6 +42,14 @@ code { font-family: var(--vscode-editor-font-family); }
 .preview-table { width: 100%; border-collapse: collapse; }
 .preview-table th, .preview-table td { border-bottom: 1px solid var(--vscode-editorGroup-border); padding: 8px; font-size: 12px; text-align: left; }
 .preview-empty { text-align: center; padding: 24px; color: var(--vscode-descriptionForeground); }
+
+/* Sortable column headers */
+.sortable { cursor: pointer; user-select: none; position: relative; padding-right: 18px !important; }
+.sortable:hover { background: var(--vscode-list-hoverBackground); }
+.sortable::after { content: ''; position: absolute; right: 4px; top: 50%; transform: translateY(-50%); border: 4px solid transparent; opacity: 0.3; }
+.sortable.sort-asc::after { border-bottom-color: var(--vscode-foreground); border-top: none; opacity: 1; }
+.sortable.sort-desc::after { border-top-color: var(--vscode-foreground); border-bottom: none; opacity: 1; }
+.sortable:not(.sort-asc):not(.sort-desc):hover::after { border-bottom-color: var(--vscode-foreground); opacity: 0.5; }
 </style>
 </head>
 <body>
@@ -118,6 +126,10 @@ code { font-family: var(--vscode-editor-font-family); }
     let cleanupMode = 'local'; // 'local' or 'remote'
     let selectModeActive = false;
 
+    // Sort state for each table
+    let localSort = { column: 'name', direction: 'asc' };
+    let remoteSort = { column: 'name', direction: 'asc' };
+
     // Static labels
     $('refresh').textContent = I18N.refresh;
     $('create').textContent = I18N.create;
@@ -179,6 +191,42 @@ code { font-family: var(--vscode-editor-font-family); }
       }
     });
 
+    // Sort helper functions
+    function getStatusPriority(branch) {
+      let p = 0;
+      if (branch.isGone) p += 4;
+      if (branch.isMerged) p += 2;
+      if (branch.isStale) p += 1;
+      return p;
+    }
+
+    function sortBranches(branches, column, direction, isRemote) {
+      return [...branches].sort((a, b) => {
+        let result = 0;
+        if (column === 'name') {
+          let nameA = isRemote ? a.short.split('/').slice(1).join('/') : a.short;
+          let nameB = isRemote ? b.short.split('/').slice(1).join('/') : b.short;
+          result = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+        } else if (column === 'lastCommit') {
+          result = (a.lastCommitAgeInDays ?? 99999) - (b.lastCommitAgeInDays ?? 99999);
+        } else if (column === 'status') {
+          result = getStatusPriority(a) - getStatusPriority(b);
+        }
+        return direction === 'desc' ? -result : result;
+      });
+    }
+
+    function toggleSort(table, column) {
+      const s = table === 'local' ? localSort : remoteSort;
+      if (s.column === column) {
+        s.direction = s.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        s.column = column;
+        s.direction = 'asc';
+      }
+      if (currentState) render(currentState);
+    }
+
     function render(state) {
       repoEl.textContent = state.repoRoot;
       localEl.innerHTML = '';
@@ -189,14 +237,28 @@ code { font-family: var(--vscode-editor-font-family); }
     }
 
     function renderLocal(rows, showBadges) {
+      // Sort the rows before rendering
+      const sortedRows = sortBranches(rows, localSort.column, localSort.direction, false);
+
       const selectColHtml = selectModeActive ? '<th class="select-col"></th>' : '';
-      const header = '<tr>' + selectColHtml + '<th>' + escapeHtml(I18N.localHeaderCurrent) + '</th><th>' + escapeHtml(I18N.localHeaderName) + '</th>'
-        + '<th>' + escapeHtml(I18N.localHeaderStatus) + '</th>'
+      const nameClass = 'sortable' + (localSort.column === 'name' ? ' sort-' + localSort.direction : '');
+      const statusClass = 'sortable' + (localSort.column === 'status' ? ' sort-' + localSort.direction : '');
+      const lastCommitClass = 'sortable' + (localSort.column === 'lastCommit' ? ' sort-' + localSort.direction : '');
+
+      const header = '<tr>' + selectColHtml + '<th>' + escapeHtml(I18N.localHeaderCurrent) + '</th>'
+        + '<th class="' + nameClass + '" data-sort="name" data-table="local">' + escapeHtml(I18N.localHeaderName) + '</th>'
+        + '<th class="' + statusClass + '" data-sort="status" data-table="local">' + escapeHtml(I18N.localHeaderStatus) + '</th>'
         + '<th>' + escapeHtml(I18N.localHeaderUpstream) + '</th><th>' + escapeHtml(I18N.localHeaderAhead) + '</th><th>' + escapeHtml(I18N.localHeaderBehind) + '</th>'
-        + '<th>' + escapeHtml(I18N.localHeaderLastCommit) + '</th>'
+        + '<th class="' + lastCommitClass + '" data-sort="lastCommit" data-table="local">' + escapeHtml(I18N.localHeaderLastCommit) + '</th>'
         + '<th>' + escapeHtml(I18N.localHeaderActions) + '</th></tr>';
       localEl.insertAdjacentHTML('beforeend', header);
-      for (const r of rows) {
+
+      // Add click listeners to sortable headers
+      localEl.querySelectorAll('.sortable').forEach(th => {
+        th.addEventListener('click', () => toggleSort(th.dataset.table, th.dataset.sort));
+      });
+
+      for (const r of sortedRows) {
         const cur = r.isCurrent ? '<span class="badge">' + escapeHtml(I18N.badgeHead) + '</span>' : '';
 
         // Status badges
@@ -244,13 +306,27 @@ code { font-family: var(--vscode-editor-font-family); }
     }
 
     function renderRemote(rows, showBadges) {
+      // Sort the rows before rendering
+      const sortedRows = sortBranches(rows, remoteSort.column, remoteSort.direction, true);
+
       const selectColHtml = selectModeActive ? '<th class="select-col"></th>' : '';
-      const header = '<tr>' + selectColHtml + '<th>' + escapeHtml(I18N.remoteHeaderRemote) + '</th><th>' + escapeHtml(I18N.remoteHeaderName) + '</th>'
-        + '<th>' + escapeHtml(I18N.localHeaderStatus) + '</th>'
-        + '<th>' + escapeHtml(I18N.localHeaderLastCommit) + '</th>'
+      const nameClass = 'sortable' + (remoteSort.column === 'name' ? ' sort-' + remoteSort.direction : '');
+      const statusClass = 'sortable' + (remoteSort.column === 'status' ? ' sort-' + remoteSort.direction : '');
+      const lastCommitClass = 'sortable' + (remoteSort.column === 'lastCommit' ? ' sort-' + remoteSort.direction : '');
+
+      const header = '<tr>' + selectColHtml + '<th>' + escapeHtml(I18N.remoteHeaderRemote) + '</th>'
+        + '<th class="' + nameClass + '" data-sort="name" data-table="remote">' + escapeHtml(I18N.remoteHeaderName) + '</th>'
+        + '<th class="' + statusClass + '" data-sort="status" data-table="remote">' + escapeHtml(I18N.localHeaderStatus) + '</th>'
+        + '<th class="' + lastCommitClass + '" data-sort="lastCommit" data-table="remote">' + escapeHtml(I18N.localHeaderLastCommit) + '</th>'
         + '<th>' + escapeHtml(I18N.remoteHeaderActions) + '</th></tr>';
       remoteEl.insertAdjacentHTML('beforeend', header);
-      for (const r of rows) {
+
+      // Add click listeners to sortable headers
+      remoteEl.querySelectorAll('.sortable').forEach(th => {
+        th.addEventListener('click', () => toggleSort(th.dataset.table, th.dataset.sort));
+      });
+
+      for (const r of sortedRows) {
         const parts = r.short.split('/');
         const remote = parts.shift();
         const name = parts.join('/');
