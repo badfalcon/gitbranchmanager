@@ -4,6 +4,12 @@ All notable changes to the "gitsouji" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [1.3.1] - 2026-02-04
+
+### Added
+
+- Extension icon for VS Code Marketplace and extension list
+
 ## [1.3.0] - 2026-01-27
 
 ### Added

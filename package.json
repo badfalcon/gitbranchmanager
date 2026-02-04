@@ -2,9 +2,10 @@
   "name": "gitsouji",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "publisher": "badfalcon",
   "license": "MIT",
+  "icon": "images/icon.png",
   "readme": "STORE.md",
   "repository": {
     "type": "git",
