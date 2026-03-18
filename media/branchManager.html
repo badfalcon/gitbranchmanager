@@ -500,8 +500,10 @@ code { font-family: var(--vscode-editor-font-family); }
       if (!currentState) return;
       cleanupMode = mode || 'local';
 
-      const source = cleanupMode === 'remote' ? currentState.remotes : currentState.locals;
-      previewCandidates = source.filter(b => {
+      const isRemote = cleanupMode === 'remote';
+      const source = isRemote ? currentState.remotes : currentState.locals;
+      const filtered = filterBranches(source, searchQuery, useRegex, caseSensitive, isRemote);
+      previewCandidates = filtered.filter(b => {
         if (b.protected) return false;
         if (cleanupMode === 'local' && b.isCurrent) return false;
         if (filter === 'merged') return b.isMerged;
