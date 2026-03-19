@@ -71,7 +71,7 @@ code { font-family: var(--vscode-editor-font-family); }
 .queue-title { font-weight: bold; font-size: 12px; flex: 1; }
 .queue-count { font-size: 11px; padding: 1px 8px; border-radius: 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
 .queue-actions { display: flex; gap: 6px; }
-.queue-confirm { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--vscode-inputValidation-warningBackground, #4d3a00); border-bottom: 1px solid var(--vscode-inputValidation-warningBorder, #856d00); }
+.queue-confirm { display: flex; align-items: center; gap: 8px; flex: 1; }
 .queue-confirm-msg { flex: 1; font-size: 12px; font-weight: bold; }
 .queue-confirm-actions { display: flex; gap: 6px; }
 .queue-body { max-height: 200px; overflow-y: auto; padding: 0 12px 8px; }
@@ -157,12 +157,12 @@ code { font-family: var(--vscode-editor-font-family); }
         <button class="btn" id="queueClear"></button>
         <button class="btn primary" id="queueExecute"></button>
       </div>
-    </div>
-    <div class="queue-confirm" id="queueConfirm" style="display:none;">
-      <span class="queue-confirm-msg" id="queueConfirmMsg"></span>
-      <div class="queue-confirm-actions">
-        <button class="btn" id="queueConfirmCancel"></button>
-        <button class="btn danger" id="queueConfirmYes"></button>
+      <div class="queue-confirm" id="queueConfirm" style="display:none;">
+        <span class="queue-confirm-msg" id="queueConfirmMsg"></span>
+        <div class="queue-confirm-actions">
+          <button class="btn" id="queueConfirmCancel"></button>
+          <button class="btn danger" id="queueConfirmYes"></button>
+        </div>
       </div>
     </div>
     <div class="queue-body" id="queueBody">
@@ -292,8 +292,8 @@ code { font-family: var(--vscode-editor-font-family); }
 
     // Queue panel events
     $('queueHeader').addEventListener('click', (e) => {
-      // Don't toggle collapse when clicking action buttons inside the header
-      if (e.target.closest('.queue-actions')) return;
+      // Don't toggle collapse when clicking buttons inside the header
+      if (e.target.closest('.queue-actions') || e.target.closest('.queue-confirm')) return;
       toggleQueueCollapse();
     });
     $('queueExecute').addEventListener('click', showQueueConfirm);
@@ -851,18 +851,17 @@ code { font-family: var(--vscode-editor-font-family); }
         .replace('{0}', deletionQueue.length);
       $('queueConfirmMsg').textContent = msg;
       $('queueConfirm').style.display = '';
+      // Hide action buttons so the confirm bar occupies the same header area
+      // and nothing dangerous sits at the old Execute button position
+      $('queueActions').style.display = 'none';
       // Expand queue body so user can scroll through items
       queueCollapsed = false;
       $('queueBody').classList.remove('collapsed');
-      // Disable Execute/Clear while confirming
-      $('queueExecute').disabled = true;
-      $('queueClear').disabled = true;
     }
 
     function hideQueueConfirm() {
       $('queueConfirm').style.display = 'none';
-      $('queueExecute').disabled = false;
-      $('queueClear').disabled = false;
+      $('queueActions').style.display = '';
     }
 
     function executeQueue() {
