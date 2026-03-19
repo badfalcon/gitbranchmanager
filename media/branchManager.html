@@ -66,6 +66,9 @@ code { font-family: var(--vscode-editor-font-family); }
 
 /* Deletion queue panel (sticky bottom) */
 .queue-panel { position: sticky; bottom: 0; background: var(--vscode-sideBar-background); border-top: 2px solid var(--vscode-focusBorder); margin-top: 24px; z-index: 50; }
+.queue-resize-handle { height: 5px; cursor: ns-resize; background: transparent; display: flex; align-items: center; justify-content: center; }
+.queue-resize-handle:hover, .queue-resize-handle.active { background: var(--vscode-focusBorder); opacity: 0.4; }
+.queue-resize-handle::after { content: ''; width: 32px; height: 2px; border-radius: 1px; background: var(--vscode-descriptionForeground); opacity: 0.5; }
 .queue-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; user-select: none; }
 .queue-header:hover { background: var(--vscode-list-hoverBackground); }
 .queue-title { font-weight: bold; font-size: 12px; flex: 1; }
@@ -150,6 +153,7 @@ code { font-family: var(--vscode-editor-font-family); }
 
   <!-- Deletion Queue (sticky bottom) -->
   <div class="queue-panel" id="queuePanel" style="display:none;">
+    <div class="queue-resize-handle" id="queueResizeHandle"></div>
     <div class="queue-header" id="queueHeader">
       <span class="queue-title" id="queueTitle"></span>
       <span class="queue-count" id="queueCount">0</span>
@@ -300,6 +304,32 @@ code { font-family: var(--vscode-editor-font-family); }
     $('queueClear').addEventListener('click', clearQueue);
     $('queueConfirmYes').addEventListener('click', executeQueue);
     $('queueConfirmCancel').addEventListener('click', hideQueueConfirm);
+
+    // Queue resize handle
+    {
+      const handle = $('queueResizeHandle');
+      const body = $('queueBody');
+      let startY = 0, startH = 0;
+      handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        startY = e.clientY;
+        startH = body.offsetHeight;
+        handle.classList.add('active');
+        const onMove = (e) => {
+          const delta = startY - e.clientY; // dragging up = bigger
+          const h = Math.max(60, Math.min(startH + delta, window.innerHeight * 0.7));
+          body.style.maxHeight = h + 'px';
+          if (queueCollapsed) { queueCollapsed = false; body.classList.remove('collapsed'); }
+        };
+        const onUp = () => {
+          handle.classList.remove('active');
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      });
+    }
 
     // Search event listeners (unified)
     $('searchInput').addEventListener('input', (e) => {
