@@ -120,5 +120,13 @@
   "{0} / {1} completed": "{0} / {1} 完了",
   "{0} failed": "{0} 件失敗",
   "local": "ローカル",
-  "remote": "リモート"
+  "remote": "リモート",
+
+  "Deletion Queue": "削除キュー",
+  "Execute": "実行",
+  "Clear": "クリア",
+  "Queue is empty. Use Cleanup or Select mode to add branches.": "キューは空です。整理またはセレクトモードでブランチを追加してください。",
+  "{0} branches added to queue": "{0} 件のブランチをキューに追加しました",
+  "Add to Queue": "キューに追加",
+  "Also delete corresponding remote branches": "対応するリモートブランチも削除する"
 }

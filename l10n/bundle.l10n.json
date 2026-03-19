@@ -120,5 +120,13 @@
   "{0} / {1} completed": "{0} / {1} completed",
   "{0} failed": "{0} failed",
   "local": "local",
-  "remote": "remote"
+  "remote": "remote",
+
+  "Deletion Queue": "Deletion Queue",
+  "Execute": "Execute",
+  "Clear": "Clear",
+  "Queue is empty. Use Cleanup or Select mode to add branches.": "Queue is empty. Use Cleanup or Select mode to add branches.",
+  "{0} branches added to queue": "{0} branches added to queue",
+  "Add to Queue": "Add to Queue",
+  "Also delete corresponding remote branches": "Also delete corresponding remote branches"
 }

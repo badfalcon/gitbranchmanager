@@ -64,8 +64,25 @@ code { font-family: var(--vscode-editor-font-family); }
 .regex-toggle input { display: none; }
 .regex-toggle.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-focusBorder); }
 
-/* Deletion queue progress */
-.deletion-progress-summary { margin-bottom: 12px; font-size: 12px; display: flex; gap: 16px; align-items: center; }
+/* Deletion queue panel (sticky bottom) */
+.queue-panel { position: sticky; bottom: 0; background: var(--vscode-sideBar-background); border-top: 2px solid var(--vscode-focusBorder); margin-top: 24px; z-index: 50; }
+.queue-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; user-select: none; }
+.queue-header:hover { background: var(--vscode-list-hoverBackground); }
+.queue-title { font-weight: bold; font-size: 12px; flex: 1; }
+.queue-count { font-size: 11px; padding: 1px 8px; border-radius: 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
+.queue-actions { display: flex; gap: 6px; }
+.queue-body { max-height: 200px; overflow-y: auto; padding: 0 12px 8px; }
+.queue-body.collapsed { display: none; }
+.queue-empty { text-align: center; padding: 12px; color: var(--vscode-descriptionForeground); font-size: 11px; }
+.queue-item { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 12px; }
+.queue-item-name { flex: 1; }
+.queue-item-remove { cursor: pointer; opacity: 0.6; border: none; background: none; color: var(--vscode-foreground); font-size: 14px; padding: 0 4px; }
+.queue-item-remove:hover { opacity: 1; color: var(--vscode-errorForeground); }
+.queue-toast { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); padding: 6px 16px; border-radius: 4px; font-size: 12px; z-index: 200; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+.queue-toast.visible { opacity: 1; }
+
+/* Deletion progress (inside queue) */
+.deletion-progress-summary { margin-bottom: 8px; font-size: 12px; display: flex; gap: 16px; align-items: center; padding: 0 0 4px; }
 .deletion-progress-failed { color: var(--vscode-errorForeground, #f44336); }
 .deletion-status-icon { display: inline-block; width: 16px; text-align: center; }
 .deletion-success { color: var(--vscode-testing-iconPassed, #4caf50); }
@@ -128,6 +145,23 @@ code { font-family: var(--vscode-editor-font-family); }
     <table class="table" id="remote"></table>
   </div>
 
+  <!-- Deletion Queue (sticky bottom) -->
+  <div class="queue-panel" id="queuePanel" style="display:none;">
+    <div class="queue-header" id="queueHeader">
+      <span class="queue-title" id="queueTitle"></span>
+      <span class="queue-count" id="queueCount">0</span>
+      <div class="queue-actions" id="queueActions">
+        <button class="btn" id="queueClear"></button>
+        <button class="btn primary" id="queueExecute"></button>
+      </div>
+    </div>
+    <div class="queue-body" id="queueBody">
+      <div class="queue-empty" id="queueEmpty"></div>
+      <div id="queueItems"></div>
+    </div>
+  </div>
+  <div class="queue-toast" id="queueToast"></div>
+
   <!-- Preview Modal -->
   <div class="preview-overlay" id="previewOverlay"></div>
   <div class="preview-panel" id="previewPanel">
@@ -165,6 +199,11 @@ code { font-family: var(--vscode-editor-font-family); }
     let cleanupMode = 'local'; // 'local' or 'remote'
     let selectModeActive = false;
 
+    // Deletion queue state: { name: string, kind: 'local'|'remote' }[]
+    let deletionQueue = [];
+    let queueCollapsed = false;
+    let queueExecuting = false;
+
     // Sort state for each table
     let localSort = { column: 'name', direction: 'asc' };
     let remoteSort = { column: 'name', direction: 'asc' };
@@ -199,9 +238,15 @@ code { font-family: var(--vscode-editor-font-family); }
 
     // Preview panel labels
     $('previewTitle').textContent = I18N.previewTitle;
-    $('includeRemoteLabel').textContent = I18N.previewIncludeRemote;
+    $('includeRemoteLabel').textContent = I18N.queueIncludeRemote || I18N.previewIncludeRemote;
     $('previewCancel').textContent = I18N.previewCancel;
-    $('previewExecute').textContent = I18N.previewExecute;
+    $('previewExecute').textContent = I18N.previewAddToQueue || 'Add to Queue';
+
+    // Queue panel labels
+    $('queueTitle').textContent = I18N.queueTitle || 'Deletion Queue';
+    $('queueExecute').textContent = I18N.queueExecute || 'Execute';
+    $('queueClear').textContent = I18N.queueClear || 'Clear';
+    $('queueEmpty').textContent = I18N.queueEmpty || 'Queue is empty.';
 
     // Search placeholders and tooltips
     $('searchInput').placeholder = I18N.searchPlaceholder || 'Search branches...';
@@ -231,7 +276,12 @@ code { font-family: var(--vscode-editor-font-family); }
     $('previewClose').addEventListener('click', closePreview);
     $('previewOverlay').addEventListener('click', closePreview);
     $('previewCancel').addEventListener('click', closePreview);
-    $('previewExecute').addEventListener('click', executeCleanup);
+    $('previewExecute').addEventListener('click', addPreviewToQueue);
+
+    // Queue panel events
+    $('queueHeader').addEventListener('click', toggleQueueCollapse);
+    $('queueExecute').addEventListener('click', executeQueue);
+    $('queueClear').addEventListener('click', clearQueue);
 
     // Search event listeners (unified)
     $('searchInput').addEventListener('input', (e) => {
@@ -267,8 +317,6 @@ code { font-family: var(--vscode-editor-font-family); }
 
       if (currentState) render(currentState);
     }
-
-    let deletionInProgress = false;
 
     window.addEventListener('message', (e) => {
       const msg = e.data;
@@ -530,15 +578,6 @@ code { font-family: var(--vscode-editor-font-family); }
       if (!currentState) return;
       cleanupMode = mode || 'local';
 
-      // Reset modal state from possible previous deletion progress
-      $('previewExecute').style.display = '';
-      $('previewExecute').disabled = false;
-      $('previewCancel').style.display = '';
-      $('previewCancel').disabled = false;
-      $('previewCancel').textContent = I18N.previewCancel;
-      $('previewTitle').textContent = I18N.previewTitle;
-      deletionInProgress = false;
-
       const isRemote = cleanupMode === 'remote';
       const source = isRemote ? currentState.remotes : currentState.locals;
       const filtered = filterBranches(source, searchQuery, useRegex, caseSensitive, isRemote);
@@ -624,91 +663,191 @@ code { font-family: var(--vscode-editor-font-family); }
       }
     }
 
+    // ==================
+    // Deletion Queue
+    // ==================
+
+    function addToQueue(items) {
+      let added = 0;
+      for (const item of items) {
+        const exists = deletionQueue.some(q => q.name === item.name && q.kind === item.kind);
+        if (!exists) {
+          deletionQueue.push({ name: item.name, kind: item.kind });
+          added++;
+        }
+      }
+      renderQueue();
+      return added;
+    }
+
+    function removeFromQueue(index) {
+      if (queueExecuting) return;
+      deletionQueue.splice(index, 1);
+      renderQueue();
+    }
+
+    function clearQueue() {
+      if (queueExecuting) return;
+      deletionQueue = [];
+      renderQueue();
+    }
+
+    function toggleQueueCollapse() {
+      queueCollapsed = !queueCollapsed;
+      $('queueBody').classList.toggle('collapsed', queueCollapsed);
+    }
+
+    function renderQueue() {
+      const panel = $('queuePanel');
+      const count = deletionQueue.length;
+      $('queueCount').textContent = count;
+
+      // Always show once items have been added (or during execution)
+      if (count > 0 || queueExecuting) {
+        panel.style.display = '';
+      } else {
+        panel.style.display = 'none';
+        return;
+      }
+
+      $('queueExecute').disabled = count === 0 || queueExecuting;
+      $('queueClear').disabled = queueExecuting;
+
+      const itemsEl = $('queueItems');
+      const emptyEl = $('queueEmpty');
+
+      if (count === 0 && !queueExecuting) {
+        itemsEl.innerHTML = '';
+        emptyEl.style.display = '';
+        return;
+      }
+
+      emptyEl.style.display = 'none';
+      itemsEl.innerHTML = '';
+
+      for (let i = 0; i < deletionQueue.length; i++) {
+        const item = deletionQueue[i];
+        const div = document.createElement('div');
+        div.className = 'queue-item';
+
+        const kindLabel = item.kind === 'local' ? (I18N.deletionKindLocal || 'local') : (I18N.deletionKindRemote || 'remote');
+        div.innerHTML = '<span class="queue-item-name"><code>' + escapeHtml(item.name) + '</code> '
+          + '<span class="deletion-kind-badge">' + escapeHtml(kindLabel) + '</span></span>';
+
+        if (!queueExecuting) {
+          const removeBtn = document.createElement('button');
+          removeBtn.className = 'queue-item-remove';
+          removeBtn.textContent = '✕';
+          removeBtn.dataset.index = i;
+          removeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            removeFromQueue(parseInt(e.currentTarget.dataset.index));
+          });
+          div.appendChild(removeBtn);
+        }
+
+        itemsEl.appendChild(div);
+      }
+    }
+
     function renderDeletionProgress(items) {
       const completed = items.filter(i => i.status === 'deleted').length;
       const failed = items.filter(i => i.status === 'failed').length;
       const total = items.length;
       const allDone = items.every(i => i.status === 'deleted' || i.status === 'failed');
 
-      deletionInProgress = !allDone;
+      queueExecuting = !allDone;
 
-      // Show the modal
-      $('previewOverlay').style.display = 'block';
-      $('previewPanel').style.display = 'block';
+      // Ensure queue panel is visible and expanded
+      $('queuePanel').style.display = '';
+      queueCollapsed = false;
+      $('queueBody').classList.remove('collapsed');
 
-      // Update title
-      $('previewTitle').textContent = allDone
+      // Update header
+      $('queueTitle').textContent = allDone
         ? (I18N.deletionCompleteTitle || 'Deletion Complete')
         : (I18N.deletionProgressTitle || 'Deleting...');
+      $('queueCount').textContent = total;
+      $('queueExecute').disabled = true;
+      $('queueClear').disabled = !allDone;
 
-      // Hide preview-specific elements
-      $('includeRemote').parentElement.style.display = 'none';
-      $('previewExecute').style.display = 'none';
-      $('previewCancel').style.display = allDone ? '' : 'none';
-      $('previewCancel').textContent = allDone ? (I18N.previewCancel || 'Close') : '';
+      const itemsEl = $('queueItems');
+      $('queueEmpty').style.display = 'none';
+      itemsEl.innerHTML = '';
 
-      // Render progress table
-      const table = $('previewTable');
-      table.innerHTML = '';
-
-      // Summary row
-      const summaryRow = document.createElement('tr');
-      let summaryHtml = '<td colspan="3" class="deletion-progress-summary">'
-        + '<span>' + escapeHtml((I18N.deletionProgressCount || '{0} / {1} completed').replace('{0}', completed).replace('{1}', total)) + '</span>';
+      // Summary
+      const summary = document.createElement('div');
+      summary.className = 'deletion-progress-summary';
+      let summaryHtml = '<span>' + escapeHtml((I18N.deletionProgressCount || '{0} / {1} completed').replace('{0}', completed).replace('{1}', total)) + '</span>';
       if (failed > 0) {
         summaryHtml += '<span class="deletion-progress-failed">' + escapeHtml((I18N.deletionFailedCount || '{0} failed').replace('{0}', failed)) + '</span>';
       }
-      summaryHtml += '</td>';
-      summaryRow.innerHTML = summaryHtml;
-      table.appendChild(summaryRow);
-
-      // Header
-      const header = document.createElement('tr');
-      header.innerHTML = '<th></th><th>' + escapeHtml(I18N.localHeaderName) + '</th><th></th>';
-      table.appendChild(header);
+      summary.innerHTML = summaryHtml;
+      itemsEl.appendChild(summary);
 
       // Items
       for (const item of items) {
-        const tr = document.createElement('tr');
+        const div = document.createElement('div');
+        div.className = 'queue-item';
         let statusIcon = '';
-        let rowClass = '';
 
         if (item.status === 'pending') {
           statusIcon = '<span class="deletion-status-icon deletion-pending">○</span>';
-          rowClass = 'deletion-pending';
+          div.classList.add('deletion-pending');
         } else if (item.status === 'deleting') {
           statusIcon = '<span class="deletion-status-icon deletion-deleting">◉</span>';
-          rowClass = 'deletion-deleting';
+          div.classList.add('deletion-deleting');
         } else if (item.status === 'deleted') {
           statusIcon = '<span class="deletion-status-icon deletion-success">✓</span>';
         } else if (item.status === 'failed') {
           statusIcon = '<span class="deletion-status-icon deletion-failed">✗</span>';
         }
 
-        if (rowClass) tr.className = rowClass;
-
         const kindLabel = item.kind === 'local' ? (I18N.deletionKindLocal || 'local') : (I18N.deletionKindRemote || 'remote');
-        let nameCell = '<code>' + escapeHtml(item.name) + '</code> '
+        let nameHtml = '<code>' + escapeHtml(item.name) + '</code> '
           + '<span class="deletion-kind-badge">' + escapeHtml(kindLabel) + '</span>';
-
         if (item.status === 'failed' && item.error) {
-          nameCell += '<br/><span class="deletion-error-msg">' + escapeHtml(item.error) + '</span>';
+          nameHtml += '<br/><span class="deletion-error-msg">' + escapeHtml(item.error) + '</span>';
         }
 
-        tr.innerHTML = '<td>' + statusIcon + '</td>'
-          + '<td>' + nameCell + '</td>'
-          + '<td></td>';
-        table.appendChild(tr);
+        div.innerHTML = statusIcon + '<span class="queue-item-name">' + nameHtml + '</span>';
+        itemsEl.appendChild(div);
+      }
+
+      // When done, reset queue state
+      if (allDone) {
+        deletionQueue = [];
+        $('queueTitle').textContent = I18N.deletionCompleteTitle || 'Deletion Complete';
       }
     }
 
+    function showToast(message) {
+      const toast = $('queueToast');
+      toast.textContent = message;
+      toast.classList.add('visible');
+      setTimeout(() => toast.classList.remove('visible'), 2000);
+    }
+
+    function executeQueue() {
+      if (deletionQueue.length === 0 || queueExecuting) return;
+      queueExecuting = true;
+      renderQueue();
+      vscode.postMessage({
+        type: 'executeDeletionQueue',
+        items: deletionQueue.map(q => ({ name: q.name, kind: q.kind })),
+      });
+    }
+
+    // ==================
+    // Preview modal actions
+    // ==================
+
     function closePreview() {
-      if (deletionInProgress) return;
       $('previewOverlay').style.display = 'none';
       $('previewPanel').style.display = 'none';
     }
 
-    function executeCleanup() {
+    function addPreviewToQueue() {
       const table = $('previewTable');
       const checkboxes = table.querySelectorAll('input[type="checkbox"][data-branch]:checked');
       const branches = Array.from(checkboxes).map(cb => cb.dataset.branch);
@@ -718,18 +857,22 @@ code { font-family: var(--vscode-editor-font-family); }
         return;
       }
 
-      // Disable controls while waiting for extension to start processing
-      $('previewExecute').disabled = true;
-      $('previewCancel').disabled = true;
+      const kind = cleanupMode === 'remote' ? 'remote' : 'local';
+      const items = branches.map(name => ({ name, kind }));
 
-      if (cleanupMode === 'remote') {
-        vscode.postMessage({ type: 'executeRemoteCleanup', branches });
-      } else {
-        const includeRemote = $('includeRemote').checked;
-        vscode.postMessage({ type: 'executeCleanup', branches, includeRemote });
+      // If local cleanup with "include remote" checked, also add remote counterparts
+      if (kind === 'local' && $('includeRemote').checked) {
+        for (const name of branches) {
+          items.push({ name, kind: 'includeRemote' });
+        }
       }
-      // Don't close - the modal will transition to deletion progress view
-      // when deletionProgress messages arrive from the extension
+
+      const added = addToQueue(items);
+      closePreview();
+
+      if (added > 0) {
+        showToast((I18N.queueAddedCount || '{0} branches added to queue').replace('{0}', added));
+      }
     }
 
     function btn(label, onClick) {
@@ -765,7 +908,20 @@ code { font-family: var(--vscode-editor-font-family); }
         return;
       }
 
-      vscode.postMessage({ type: 'deleteSelectedBranches', localBranches, remoteBranches });
+      const items = [
+        ...localBranches.map(name => ({ name, kind: 'local' })),
+        ...remoteBranches.map(name => ({ name, kind: 'remote' })),
+      ];
+      const added = addToQueue(items);
+      if (added > 0) {
+        showToast((I18N.queueAddedCount || '{0} branches added to queue').replace('{0}', added));
+      }
+
+      // Exit select mode
+      selectModeActive = false;
+      $('selectMode').classList.remove('toggle-active');
+      $('selectActions').classList.add('hidden');
+      if (currentState) render(currentState);
     }
 
     function escapeHtml(s) {

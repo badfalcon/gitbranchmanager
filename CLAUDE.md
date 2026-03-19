@@ -86,7 +86,8 @@ Main TypeScript module containing:
 - **Local cleanup toolbar**: Merged/Stale/Gone/Cleanup All buttons
 - **Remote cleanup toolbar**: Merged/Stale/Cleanup All buttons (hidden when `allowRemoteBranchDeletion` is false)
 - **Select mode**: Toggle to show checkboxes for manual multi-select deletion
-- **Preview modal**: Bulk deletion preview with checkbox selection and sortable columns (Name, Status, Last Commit)
+- **Preview modal**: Cleanup candidate preview with checkbox selection and "Add to Queue" button
+- **Deletion queue panel**: Sticky bottom panel showing staged deletions with Execute/Clear controls
 - i18n strings injected at runtime as base64-encoded JSON
 
 ## Key Design Patterns
@@ -140,20 +141,25 @@ Main TypeScript module containing:
 - For **untracked branches**: prompts "Also delete X remote branches with same name (not tracked)?"
 - If confirmed, attempts to delete `origin/<branch-name>`
 
-**Deletion Queue (bulk operations)**:
-- All bulk deletion paths (`executeCleanup`, `executeRemoteCleanup`, `deleteSelectedBranches`) use a queue-based system
-- Extension sends `deletionProgress` messages to webview with per-branch status updates
-- Each `DeletionQueueItem` tracks: `name`, `kind` (local/remote), `status` (pending/deleting/deleted/failed), optional `error`
-- Webview shows real-time progress in the preview modal (reused from cleanup preview)
-- Modal is locked during deletion (close button disabled, overlay click blocked)
+**Deletion Queue (UI-side staging + bulk execution)**:
+- Webview maintains a client-side deletion queue (sticky bottom panel)
+- Users add branches to the queue via:
+  - **Cleanup preview modal**: "Add to Queue" button adds checked branches
+  - **Select mode**: "Delete Selected" adds selected branches to queue
+- Queue panel shows all pending items with `✕` buttons for individual removal
+- "Execute" button sends all queued items to extension via `executeDeletionQueue` message
+- Extension processes queue with real-time `deletionProgress` updates rendered in queue panel
+- Each `DeletionQueueItem` tracks: `name`, `kind` (local/remote/includeRemote), `status` (pending/deleting/deleted/failed), optional `error`
+- `includeRemote` kind: local branches whose remote counterpart should also be deleted (resolved via upstream map)
 - Force-delete retry transitions failed items back to pending before retrying
+- Single delete operations (per-row Delete button) bypass the queue and execute immediately
 
 ### Select Mode
 - Toggle "Select" button to enter select mode
 - Checkboxes appear on selectable branch rows (hidden for current/protected branches)
 - Select branches from both local and remote tables simultaneously
 - Counter shows "X selected"
-- Click "Delete Selected" to bulk delete all selected branches
+- Click "Delete Selected" to add all selected branches to the deletion queue
 
 ### Configuration Keys
 All settings are under `gitSouji.*`, organized by category:
@@ -193,6 +199,7 @@ Two-way message flow between extension and webview:
 - `{ type: 'executeCleanup'; branches: string[]; includeRemote: boolean }` - bulk delete local branches (with optional remote)
 - `{ type: 'executeRemoteCleanup'; branches: string[] }` - bulk delete remote branches
 - `{ type: 'deleteSelectedBranches'; localBranches: string[]; remoteBranches: string[] }` - delete selected branches from select mode
+- `{ type: 'executeDeletionQueue'; items: { name: string; kind: 'local' | 'remote' | 'includeRemote' }[] }` - execute deletion queue
 
 **Extension → Webview (State)**:
 - `{ type: 'state'; state: { locals: BranchRow[]; remotes: BranchRow[]; current?: string; repoRoot: string; showStatusBadges?: boolean; allowRemoteBranchDeletion?: boolean } }` - branch list with status
