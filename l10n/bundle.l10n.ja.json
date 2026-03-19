@@ -118,5 +118,7 @@
   "Deleting...": "削除中...",
   "Deletion Complete": "削除完了",
   "{0} / {1} completed": "{0} / {1} 完了",
-  "{0} failed": "{0} 件失敗"
+  "{0} failed": "{0} 件失敗",
+  "local": "ローカル",
+  "remote": "リモート"
 }

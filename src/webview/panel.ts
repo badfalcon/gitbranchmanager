@@ -665,6 +665,8 @@ type WebviewI18n = {
   deletionCompleteTitle: string;
   deletionProgressCount: string;
   deletionFailedCount: string;
+  deletionKindLocal: string;
+  deletionKindRemote: string;
 };
 
 function getWebviewI18n(): WebviewI18n {
@@ -739,6 +741,8 @@ function getWebviewI18n(): WebviewI18n {
     deletionCompleteTitle: vscode.l10n.t('Deletion Complete'),
     deletionProgressCount: vscode.l10n.t('{0} / {1} completed'),
     deletionFailedCount: vscode.l10n.t('{0} failed'),
+    deletionKindLocal: vscode.l10n.t('local'),
+    deletionKindRemote: vscode.l10n.t('remote'),
   };
 }
 

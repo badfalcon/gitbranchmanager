@@ -516,6 +516,13 @@ code { font-family: var(--vscode-editor-font-family); }
       if (!currentState) return;
       cleanupMode = mode || 'local';
 
+      // Reset modal state from possible previous deletion progress
+      $('previewExecute').style.display = '';
+      $('previewCancel').style.display = '';
+      $('previewCancel').textContent = I18N.previewCancel;
+      $('previewTitle').textContent = I18N.previewTitle;
+      deletionInProgress = false;
+
       const isRemote = cleanupMode === 'remote';
       const source = isRemote ? currentState.remotes : currentState.locals;
       const filtered = filterBranches(source, searchQuery, useRegex, caseSensitive, isRemote);
@@ -631,7 +638,7 @@ code { font-family: var(--vscode-editor-font-family); }
       // Summary row
       const summaryRow = document.createElement('tr');
       let summaryHtml = '<td colspan="3" class="deletion-progress-summary">'
-        + '<span>' + escapeHtml((I18N.deletionProgressCount || '{0} / {1} completed').replace('{0}', completed + failed).replace('{1}', total)) + '</span>';
+        + '<span>' + escapeHtml((I18N.deletionProgressCount || '{0} / {1} completed').replace('{0}', completed).replace('{1}', total)) + '</span>';
       if (failed > 0) {
         summaryHtml += '<span class="deletion-progress-failed">' + escapeHtml((I18N.deletionFailedCount || '{0} failed').replace('{0}', failed)) + '</span>';
       }
@@ -664,8 +671,9 @@ code { font-family: var(--vscode-editor-font-family); }
 
         if (rowClass) tr.className = rowClass;
 
+        const kindLabel = item.kind === 'local' ? (I18N.deletionKindLocal || 'local') : (I18N.deletionKindRemote || 'remote');
         let nameCell = '<code>' + escapeHtml(item.name) + '</code> '
-          + '<span class="deletion-kind-badge">' + escapeHtml(item.kind) + '</span>';
+          + '<span class="deletion-kind-badge">' + escapeHtml(kindLabel) + '</span>';
 
         if (item.status === 'failed' && item.error) {
           nameCell += '<br/><span class="deletion-error-msg">' + escapeHtml(item.error) + '</span>';
@@ -700,7 +708,8 @@ code { font-family: var(--vscode-editor-font-family); }
         const includeRemote = $('includeRemote').checked;
         vscode.postMessage({ type: 'executeCleanup', branches, includeRemote });
       }
-      closePreview();
+      // Don't close - the modal will transition to deletion progress view
+      // when deletionProgress messages arrive from the extension
     }
 
     function btn(label, onClick) {
