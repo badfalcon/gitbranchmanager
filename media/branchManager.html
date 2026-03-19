@@ -71,6 +71,9 @@ code { font-family: var(--vscode-editor-font-family); }
 .queue-title { font-weight: bold; font-size: 12px; flex: 1; }
 .queue-count { font-size: 11px; padding: 1px 8px; border-radius: 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
 .queue-actions { display: flex; gap: 6px; }
+.queue-confirm { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--vscode-inputValidation-warningBackground, #4d3a00); border-bottom: 1px solid var(--vscode-inputValidation-warningBorder, #856d00); }
+.queue-confirm-msg { flex: 1; font-size: 12px; font-weight: bold; }
+.queue-confirm-actions { display: flex; gap: 6px; }
 .queue-body { max-height: 200px; overflow-y: auto; padding: 0 12px 8px; }
 .queue-body.collapsed { display: none; }
 .queue-empty { text-align: center; padding: 12px; color: var(--vscode-descriptionForeground); font-size: 11px; }
@@ -153,6 +156,13 @@ code { font-family: var(--vscode-editor-font-family); }
       <div class="queue-actions" id="queueActions">
         <button class="btn" id="queueClear"></button>
         <button class="btn primary" id="queueExecute"></button>
+      </div>
+    </div>
+    <div class="queue-confirm" id="queueConfirm" style="display:none;">
+      <span class="queue-confirm-msg" id="queueConfirmMsg"></span>
+      <div class="queue-confirm-actions">
+        <button class="btn" id="queueConfirmCancel"></button>
+        <button class="btn danger" id="queueConfirmYes"></button>
       </div>
     </div>
     <div class="queue-body" id="queueBody">
@@ -247,6 +257,8 @@ code { font-family: var(--vscode-editor-font-family); }
     $('queueExecute').textContent = I18N.queueExecute || 'Execute';
     $('queueClear').textContent = I18N.queueClear || 'Clear';
     $('queueEmpty').textContent = I18N.queueEmpty || 'Queue is empty.';
+    $('queueConfirmYes').textContent = I18N.queueConfirmYes || 'Delete';
+    $('queueConfirmCancel').textContent = I18N.queueConfirmCancel || 'Cancel';
 
     // Search placeholders and tooltips
     $('searchInput').placeholder = I18N.searchPlaceholder || 'Search branches...';
@@ -280,8 +292,10 @@ code { font-family: var(--vscode-editor-font-family); }
 
     // Queue panel events
     $('queueHeader').addEventListener('click', toggleQueueCollapse);
-    $('queueExecute').addEventListener('click', executeQueue);
+    $('queueExecute').addEventListener('click', showQueueConfirm);
     $('queueClear').addEventListener('click', clearQueue);
+    $('queueConfirmYes').addEventListener('click', executeQueue);
+    $('queueConfirmCancel').addEventListener('click', hideQueueConfirm);
 
     // Search event listeners (unified)
     $('searchInput').addEventListener('input', (e) => {
@@ -828,8 +842,29 @@ code { font-family: var(--vscode-editor-font-family); }
       setTimeout(() => toast.classList.remove('visible'), 2000);
     }
 
+    function showQueueConfirm() {
+      if (deletionQueue.length === 0 || queueExecuting) return;
+      const msg = (I18N.queueConfirmMsg || 'Delete {0} branches? This cannot be undone.')
+        .replace('{0}', deletionQueue.length);
+      $('queueConfirmMsg').textContent = msg;
+      $('queueConfirm').style.display = '';
+      // Expand queue body so user can scroll through items
+      queueCollapsed = false;
+      $('queueBody').classList.remove('collapsed');
+      // Disable Execute/Clear while confirming
+      $('queueExecute').disabled = true;
+      $('queueClear').disabled = true;
+    }
+
+    function hideQueueConfirm() {
+      $('queueConfirm').style.display = 'none';
+      $('queueExecute').disabled = false;
+      $('queueClear').disabled = false;
+    }
+
     function executeQueue() {
       if (deletionQueue.length === 0 || queueExecuting) return;
+      hideQueueConfirm();
       queueExecuting = true;
       renderQueue();
       vscode.postMessage({

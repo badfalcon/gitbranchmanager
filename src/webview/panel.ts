@@ -574,41 +574,8 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
             const includeRemoteItems = requestedItems.filter((it: { kind: string }) => it.kind === 'includeRemote');
             const remoteItems = requestedItems.filter((it: { kind: string }) => it.kind === 'remote');
 
-            // Build a detail string listing all queued branches so the user
-            // can review them even though the queue panel is hidden behind the
-            // confirmation dialog.  Truncate to avoid overflow in VS Code's
-            // modal which has limited vertical space.
-            if (cfg.confirmBeforeDelete) {
-              const allItems: { name: string; label: string }[] = [];
-              for (const it of localItems) {
-                allItems.push({ name: (it as { name: string }).name, label: vscode.l10n.t('local') });
-              }
-              for (const it of includeRemoteItems) {
-                allItems.push({ name: (it as { name: string }).name, label: `${vscode.l10n.t('local')} + ${vscode.l10n.t('remote')}` });
-              }
-              for (const it of remoteItems) {
-                allItems.push({ name: (it as { name: string }).name, label: vscode.l10n.t('remote') });
-              }
-
-              const maxLines = 10;
-              const lines = allItems.slice(0, maxLines).map(
-                i => `  ${i.name}  (${i.label})`
-              );
-              if (allItems.length > maxLines) {
-                lines.push(`  ... +${allItems.length - maxLines}`);
-              }
-
-              const total = allItems.length;
-              const yes = vscode.l10n.t('Yes');
-              const pick = await vscode.window.showWarningMessage(
-                vscode.l10n.t('Delete {0} selected branches?', total),
-                { modal: true, detail: lines.join('\n') },
-                yes
-              );
-              if (pick !== yes) {
-                break;
-              }
-            }
+            // Confirmation is handled in the webview (queue confirm bar)
+            // so the user can scroll through all items before confirming.
 
             // Fetch upstream map for includeRemote items BEFORE deleting
             const upstreams = includeRemoteItems.length > 0 ? await getUpstreamMap(repo.repoRoot) : new Map<string, string>();
@@ -877,6 +844,9 @@ type WebviewI18n = {
   queueAddedCount: string;
   previewAddToQueue: string;
   queueIncludeRemote: string;
+  queueConfirmMsg: string;
+  queueConfirmYes: string;
+  queueConfirmCancel: string;
 };
 
 function getWebviewI18n(): WebviewI18n {
@@ -962,6 +932,9 @@ function getWebviewI18n(): WebviewI18n {
     queueAddedCount: vscode.l10n.t('{0} branches added to queue'),
     previewAddToQueue: vscode.l10n.t('Add to Queue'),
     queueIncludeRemote: vscode.l10n.t('Also delete corresponding remote branches'),
+    queueConfirmMsg: vscode.l10n.t('Delete {0} branches? This cannot be undone.'),
+    queueConfirmYes: vscode.l10n.t('Delete'),
+    queueConfirmCancel: vscode.l10n.t('Cancel'),
   };
 }
 

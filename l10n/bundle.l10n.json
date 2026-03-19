@@ -128,5 +128,7 @@
   "Queue is empty. Use Cleanup or Select mode to add branches.": "Queue is empty. Use Cleanup or Select mode to add branches.",
   "{0} branches added to queue": "{0} branches added to queue",
   "Add to Queue": "Add to Queue",
-  "Also delete corresponding remote branches": "Also delete corresponding remote branches"
+  "Also delete corresponding remote branches": "Also delete corresponding remote branches",
+  "Delete {0} branches? This cannot be undone.": "Delete {0} branches? This cannot be undone.",
+  "Delete": "Delete"
 }
