@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { readFile } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
 
 import {
   checkoutBranch,
@@ -57,10 +58,6 @@ async function getState(repoRoot: string): Promise<State> {
     listRemoteBranchesWithStatus(repoRoot, baseBranch, cfg.staleDays),
   ]);
 
-  for (const b of locals) {
-    b.isCurrent = b.short === current;
-  }
-
   return {
     locals,
     remotes,
@@ -73,7 +70,15 @@ async function getState(repoRoot: string): Promise<State> {
   };
 }
 
+let activePanel: vscode.WebviewPanel | undefined;
+
 export async function openManagerPanel(context: vscode.ExtensionContext, repo: RepoContext) {
+  // Reuse existing panel instead of opening duplicates
+  if (activePanel) {
+    activePanel.reveal(vscode.ViewColumn.Active);
+    return;
+  }
+
   const panel = vscode.window.createWebviewPanel(
     'gitBranchCleaner',
     'Git Souji',
@@ -83,8 +88,10 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
       retainContextWhenHidden: true,
     }
   );
+  activePanel = panel;
+  panel.onDidDispose(() => { activePanel = undefined; }, undefined, context.subscriptions);
 
-  const nonce = String(Math.random()).slice(2);
+  const nonce = randomBytes(16).toString('base64url');
   panel.webview.html = await getHtmlFromFile(context, nonce);
 
   const refresh = async () => {
@@ -247,6 +254,10 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
             const failedRemote: string[] = [];
             const deletedBranches: string[] = [];
 
+            // Fetch upstream map BEFORE deleting branches, since git removes
+            // tracking config ([branch "x"]) from .git/config upon deletion
+            const upstreams = msg.includeRemote ? await getUpstreamMap(repo.repoRoot) : new Map<string, string>();
+
             for (const name of branches) {
               try {
                 await deleteLocalBranch(repo.repoRoot, name, cfg.forceDeleteLocal);
@@ -280,7 +291,6 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
             }
 
             if (msg.includeRemote) {
-              const upstreams = await getUpstreamMap(repo.repoRoot);
 
               // Separate tracked and untracked branches
               const trackedRemotes: { remote: string; name: string; full: string }[] = [];
@@ -509,7 +519,7 @@ export async function openManagerCommand(context: vscode.ExtensionContext) {
 function openLogInTerminal(cwd: string, ref: string) {
   const term = vscode.window.createTerminal({ cwd, name: vscode.l10n.t('Git Log') });
   term.show();
-  term.sendText(`git log --oneline --graph --decorate ${ref}`);
+  term.sendText(`git log --oneline --graph --decorate -- ${JSON.stringify(ref)}`);
 }
 
 type WebviewI18n = {
