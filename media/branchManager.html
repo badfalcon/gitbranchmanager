@@ -845,6 +845,8 @@ code { font-family: var(--vscode-editor-font-family); }
       setTimeout(() => toast.classList.remove('visible'), 2000);
     }
 
+    let queueConfirmTimer = 0;
+
     function showQueueConfirm() {
       if (deletionQueue.length === 0 || queueExecuting) return;
       const msg = (I18N.queueConfirmMsg || 'Delete {0} branches? This cannot be undone.')
@@ -852,14 +854,20 @@ code { font-family: var(--vscode-editor-font-family); }
       $('queueConfirmMsg').textContent = msg;
       $('queueConfirm').style.display = '';
       // Hide action buttons so the confirm bar occupies the same header area
-      // and nothing dangerous sits at the old Execute button position
       $('queueActions').style.display = 'none';
+      // Disable the danger button briefly to prevent accidental double-click
+      const yesBtn = $('queueConfirmYes');
+      yesBtn.disabled = true;
+      clearTimeout(queueConfirmTimer);
+      queueConfirmTimer = setTimeout(() => { yesBtn.disabled = false; }, 500);
       // Expand queue body so user can scroll through items
       queueCollapsed = false;
       $('queueBody').classList.remove('collapsed');
     }
 
     function hideQueueConfirm() {
+      clearTimeout(queueConfirmTimer);
+      $('queueConfirmYes').disabled = false;
       $('queueConfirm').style.display = 'none';
       $('queueActions').style.display = '';
     }
