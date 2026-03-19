@@ -4,6 +4,25 @@ All notable changes to the "gitsouji" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [1.3.2] - 2026-03-19
+
+### Fixed
+
+- Cleanup preview modal now respects the active search filter (regex/text/case sensitivity)
+- `detectMergedRemoteBranches`: base branch is now correctly excluded regardless of whether it is specified as a short name (`main`) or full remote ref (`origin/main`)
+- `detectDeadBranches`: base branch itself is no longer incorrectly included in merged branch results
+- Upstream tracking map is now fetched *before* local branch deletion to avoid losing tracking info
+- Git log terminal command now quotes branch names to prevent special-character injection
+
+### Added
+
+- Branch name validator rejects names containing `@{`
+- Webview panel is reused on re-open instead of spawning duplicates
+
+### Changed
+
+- CSP nonce is now generated with `crypto.randomBytes` instead of `Math.random`
+
 ## [1.3.1] - 2026-02-04
 
 ### Added
