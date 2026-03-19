@@ -574,9 +574,31 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
             const includeRemoteItems = requestedItems.filter((it: { kind: string }) => it.kind === 'includeRemote');
             const remoteItems = requestedItems.filter((it: { kind: string }) => it.kind === 'remote');
 
-            // Queue items are explicitly staged by the user, so skip the
-            // initial confirmation dialog.  Per-item confirmations (force
-            // delete, untracked remotes) are still shown.
+            // Build a detail string listing all queued branches so the user
+            // can review them even though the queue panel is hidden behind the
+            // confirmation dialog.
+            if (cfg.confirmBeforeDelete) {
+              const lines: string[] = [];
+              for (const it of localItems) {
+                lines.push(`  ${(it as { name: string }).name}  (${vscode.l10n.t('local')})`);
+              }
+              for (const it of includeRemoteItems) {
+                lines.push(`  ${(it as { name: string }).name}  (${vscode.l10n.t('local')} + ${vscode.l10n.t('remote')})`);
+              }
+              for (const it of remoteItems) {
+                lines.push(`  ${(it as { name: string }).name}  (${vscode.l10n.t('remote')})`);
+              }
+              const total = localItems.length + includeRemoteItems.length + remoteItems.length;
+              const yes = vscode.l10n.t('Yes');
+              const pick = await vscode.window.showWarningMessage(
+                vscode.l10n.t('Delete {0} selected branches?', total),
+                { modal: true, detail: lines.join('\n') },
+                yes
+              );
+              if (pick !== yes) {
+                break;
+              }
+            }
 
             // Fetch upstream map for includeRemote items BEFORE deleting
             const upstreams = includeRemoteItems.length > 0 ? await getUpstreamMap(repo.repoRoot) : new Map<string, string>();
