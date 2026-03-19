@@ -40,6 +40,13 @@ export type RepoContext = {
 
 export type CleanupFilter = 'merged' | 'stale' | 'gone' | 'all';
 
+export type DeletionQueueItem = {
+  name: string;
+  kind: 'local' | 'remote';
+  status: 'pending' | 'deleting' | 'deleted' | 'failed';
+  error?: string;
+};
+
 export type WebviewMessage =
   | { type: 'ready' }
   | { type: 'refresh' }

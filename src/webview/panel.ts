@@ -20,6 +20,7 @@ import {
   renameBranch,
   resolveBaseBranch,
   simpleBranchNameValidator,
+  type DeletionQueueItem,
   type RepoContext,
   type WebviewMessage,
 } from '../app';
@@ -250,21 +251,37 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
               break;
             }
 
+            // Build the deletion queue
+            const queue: DeletionQueueItem[] = branches.map(name => ({
+              name, kind: 'local' as const, status: 'pending' as const,
+            }));
+
+            const sendProgress = () => {
+              panel.webview.postMessage({ type: 'deletionProgress', items: [...queue] });
+            };
+
+            sendProgress();
+
             const failedLocal: string[] = [];
-            const failedRemote: string[] = [];
             const deletedBranches: string[] = [];
 
             // Fetch upstream map BEFORE deleting branches, since git removes
             // tracking config ([branch "x"]) from .git/config upon deletion
             const upstreams = msg.includeRemote ? await getUpstreamMap(repo.repoRoot) : new Map<string, string>();
 
-            for (const name of branches) {
+            for (let i = 0; i < branches.length; i++) {
+              const name = branches[i];
+              queue[i].status = 'deleting';
+              sendProgress();
               try {
                 await deleteLocalBranch(repo.repoRoot, name, cfg.forceDeleteLocal);
+                queue[i].status = 'deleted';
                 deletedBranches.push(name);
               } catch {
+                queue[i].status = 'failed';
                 failedLocal.push(name);
               }
+              sendProgress();
             }
 
             // If some branches failed (likely unmerged), offer to force delete
@@ -277,21 +294,28 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
               );
               if (forceDelete) {
                 const stillFailed: string[] = [];
-                for (const name of failedLocal) {
+                for (let i = 0; i < branches.length; i++) {
+                  if (queue[i].status !== 'failed') { continue; }
+                  queue[i].status = 'deleting';
+                  sendProgress();
                   try {
-                    await deleteLocalBranch(repo.repoRoot, name, true);
-                    deletedBranches.push(name);
+                    await deleteLocalBranch(repo.repoRoot, branches[i], true);
+                    queue[i].status = 'deleted';
+                    deletedBranches.push(branches[i]);
                   } catch {
-                    stillFailed.push(name);
+                    queue[i].status = 'failed';
+                    stillFailed.push(branches[i]);
                   }
+                  sendProgress();
                 }
                 failedLocal.length = 0;
                 failedLocal.push(...stillFailed);
               }
             }
 
-            if (msg.includeRemote) {
+            const failedRemote: string[] = [];
 
+            if (msg.includeRemote) {
               // Separate tracked and untracked branches
               const trackedRemotes: { remote: string; name: string; full: string }[] = [];
               const untrackedRemotes: { remote: string; name: string; full: string }[] = [];
@@ -312,13 +336,27 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
                 }
               }
 
-              // Delete tracked remotes directly
-              for (const { remote, name, full } of trackedRemotes) {
+              // Add remote items to queue
+              const remoteItems = trackedRemotes.map(r => ({
+                name: r.full, kind: 'remote' as const, status: 'pending' as const,
+              }));
+              queue.push(...remoteItems);
+              sendProgress();
+
+              // Delete tracked remotes
+              for (let i = 0; i < trackedRemotes.length; i++) {
+                const { remote, name, full } = trackedRemotes[i];
+                const qi = queue.length - remoteItems.length + i;
+                queue[qi].status = 'deleting';
+                sendProgress();
                 try {
                   await deleteRemoteBranch(repo.repoRoot, remote, name);
+                  queue[qi].status = 'deleted';
                 } catch {
+                  queue[qi].status = 'failed';
                   failedRemote.push(full);
                 }
+                sendProgress();
               }
 
               // Ask confirmation for untracked remotes with same name
@@ -330,12 +368,25 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
                   )
                 );
                 if (deleteUntracked) {
-                  for (const { remote, name } of untrackedRemotes) {
+                  const untrackedItems = untrackedRemotes.map(r => ({
+                    name: r.full, kind: 'remote' as const, status: 'pending' as const,
+                  }));
+                  queue.push(...untrackedItems);
+                  sendProgress();
+
+                  for (let i = 0; i < untrackedRemotes.length; i++) {
+                    const { remote, name } = untrackedRemotes[i];
+                    const qi = queue.length - untrackedItems.length + i;
+                    queue[qi].status = 'deleting';
+                    sendProgress();
                     try {
                       await deleteRemoteBranch(repo.repoRoot, remote, name);
+                      queue[qi].status = 'deleted';
                     } catch {
+                      queue[qi].status = 'failed';
                       // Ignore - might not exist on remote
                     }
+                    sendProgress();
                   }
                 }
               }
@@ -355,6 +406,8 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
               );
             }
 
+            // Send final completion signal
+            panel.webview.postMessage({ type: 'deletionComplete' });
             await refresh();
             break;
           }
@@ -374,23 +427,42 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
               break;
             }
 
+            const queue: DeletionQueueItem[] = branches.map(name => ({
+              name, kind: 'remote' as const, status: 'pending' as const,
+            }));
+
+            const sendProgress = () => {
+              panel.webview.postMessage({ type: 'deletionProgress', items: [...queue] });
+            };
+
+            sendProgress();
+
             const failed: string[] = [];
-            for (const fullName of branches) {
-              // Parse "origin/branch-name" into remote and name
+            for (let i = 0; i < branches.length; i++) {
+              const fullName = branches[i];
               const parts = fullName.split('/');
               const remote = parts.shift()!;
               const name = parts.join('/');
 
               if (isProtectedBranch(name, cfg.protected)) {
+                queue[i].status = 'failed';
+                queue[i].error = 'protected';
                 failed.push(fullName);
+                sendProgress();
                 continue;
               }
 
+              queue[i].status = 'deleting';
+              sendProgress();
+
               try {
                 await deleteRemoteBranch(repo.repoRoot, remote, name);
+                queue[i].status = 'deleted';
               } catch {
+                queue[i].status = 'failed';
                 failed.push(fullName);
               }
+              sendProgress();
             }
 
             if (failed.length > 0) {
@@ -399,6 +471,7 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
               );
             }
 
+            panel.webview.postMessage({ type: 'deletionComplete' });
             await refresh();
             break;
           }
@@ -419,16 +492,38 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
               break;
             }
 
+            // Build the deletion queue with both local and remote
+            const queue: DeletionQueueItem[] = [
+              ...localBranches.map(name => ({
+                name, kind: 'local' as const, status: 'pending' as const,
+              })),
+              ...remoteBranches.map(name => ({
+                name, kind: 'remote' as const, status: 'pending' as const,
+              })),
+            ];
+
+            const sendProgress = () => {
+              panel.webview.postMessage({ type: 'deletionProgress', items: [...queue] });
+            };
+
+            sendProgress();
+
             const failedLocal: string[] = [];
             const failedRemote: string[] = [];
 
             // Delete local branches
-            for (const name of localBranches) {
+            for (let i = 0; i < localBranches.length; i++) {
+              const name = localBranches[i];
+              queue[i].status = 'deleting';
+              sendProgress();
               try {
                 await deleteLocalBranch(repo.repoRoot, name, cfg.forceDeleteLocal);
+                queue[i].status = 'deleted';
               } catch {
+                queue[i].status = 'failed';
                 failedLocal.push(name);
               }
+              sendProgress();
             }
 
             // Offer force delete for unmerged local branches
@@ -441,12 +536,18 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
               );
               if (forceDelete) {
                 const stillFailed: string[] = [];
-                for (const name of failedLocal) {
+                for (let i = 0; i < localBranches.length; i++) {
+                  if (queue[i].status !== 'failed') { continue; }
+                  queue[i].status = 'deleting';
+                  sendProgress();
                   try {
-                    await deleteLocalBranch(repo.repoRoot, name, true);
+                    await deleteLocalBranch(repo.repoRoot, localBranches[i], true);
+                    queue[i].status = 'deleted';
                   } catch {
-                    stillFailed.push(name);
+                    queue[i].status = 'failed';
+                    stillFailed.push(localBranches[i]);
                   }
+                  sendProgress();
                 }
                 failedLocal.length = 0;
                 failedLocal.push(...stillFailed);
@@ -454,21 +555,33 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
             }
 
             // Delete remote branches
-            for (const fullName of remoteBranches) {
+            const remoteOffset = localBranches.length;
+            for (let i = 0; i < remoteBranches.length; i++) {
+              const fullName = remoteBranches[i];
               const parts = fullName.split('/');
               const remote = parts.shift()!;
               const name = parts.join('/');
+              const qi = remoteOffset + i;
 
               if (isProtectedBranch(name, cfg.protected)) {
+                queue[qi].status = 'failed';
+                queue[qi].error = 'protected';
                 failedRemote.push(fullName);
+                sendProgress();
                 continue;
               }
 
+              queue[qi].status = 'deleting';
+              sendProgress();
+
               try {
                 await deleteRemoteBranch(repo.repoRoot, remote, name);
+                queue[qi].status = 'deleted';
               } catch {
+                queue[qi].status = 'failed';
                 failedRemote.push(fullName);
               }
+              sendProgress();
             }
 
             // Report failures
@@ -485,6 +598,7 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
               );
             }
 
+            panel.webview.postMessage({ type: 'deletionComplete' });
             await refresh();
             break;
           }
@@ -587,6 +701,18 @@ type WebviewI18n = {
 
   // Settings
   openSettings: string;
+
+  // Deletion progress
+  deletionProgressTitle: string;
+  deletionStatusPending: string;
+  deletionStatusDeleting: string;
+  deletionStatusDeleted: string;
+  deletionStatusFailed: string;
+  deletionKindLocal: string;
+  deletionKindRemote: string;
+  deletionDone: string;
+  deletionClose: string;
+  deletionProgressCount: string;
 };
 
 function getWebviewI18n(): WebviewI18n {
@@ -655,6 +781,18 @@ function getWebviewI18n(): WebviewI18n {
 
     // Settings
     openSettings: vscode.l10n.t('Settings'),
+
+    // Deletion progress
+    deletionProgressTitle: vscode.l10n.t('Deleting Branches...'),
+    deletionStatusPending: vscode.l10n.t('Pending'),
+    deletionStatusDeleting: vscode.l10n.t('Deleting...'),
+    deletionStatusDeleted: vscode.l10n.t('Deleted'),
+    deletionStatusFailed: vscode.l10n.t('Failed'),
+    deletionKindLocal: vscode.l10n.t('Local'),
+    deletionKindRemote: vscode.l10n.t('Remote'),
+    deletionDone: vscode.l10n.t('Deletion Complete'),
+    deletionClose: vscode.l10n.t('Close'),
+    deletionProgressCount: vscode.l10n.t('{0} / {1}'),
   };
 }
 
