@@ -418,7 +418,7 @@ code { font-family: var(--vscode-editor-font-family); }
         let checkboxHtml = '';
         if (selectModeActive) {
           checkboxHtml = canSelect
-            ? '<td class="select-col"><input type="checkbox" data-local="' + escapeHtml(r.short) + '" onchange="updateSelectCount()" /></td>'
+            ? '<td class="select-col"><input type="checkbox" data-local="' + escapeHtml(r.short) + '" /></td>'
             : '<td class="select-col"></td>';
         }
 
@@ -442,6 +442,13 @@ code { font-family: var(--vscode-editor-font-family); }
           }
         }
         localEl.appendChild(tr);
+      }
+
+      // Attach change listeners for select-mode checkboxes (CSP blocks inline onchange)
+      if (selectModeActive) {
+        localEl.querySelectorAll('input[data-local]').forEach(cb => {
+          cb.addEventListener('change', updateSelectCount);
+        });
       }
     }
 
@@ -492,7 +499,7 @@ code { font-family: var(--vscode-editor-font-family); }
         let checkboxHtml = '';
         if (selectModeActive && allowRemoteDeletion) {
           checkboxHtml = canSelect
-            ? '<td class="select-col"><input type="checkbox" data-remote="' + escapeHtml(r.short) + '" onchange="updateSelectCount()" /></td>'
+            ? '<td class="select-col"><input type="checkbox" data-remote="' + escapeHtml(r.short) + '" /></td>'
             : '<td class="select-col"></td>';
         }
 
@@ -509,6 +516,13 @@ code { font-family: var(--vscode-editor-font-family); }
           actions.appendChild(btn(I18N.actionDeleteRemote, () => vscode.postMessage({ type: 'deleteRemote', remote, name })));
         }
         remoteEl.appendChild(tr);
+      }
+
+      // Attach change listeners for select-mode checkboxes (CSP blocks inline onchange)
+      if (selectModeActive && allowRemoteDeletion) {
+        remoteEl.querySelectorAll('input[data-remote]').forEach(cb => {
+          cb.addEventListener('change', updateSelectCount);
+        });
       }
     }
 
