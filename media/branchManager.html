@@ -291,7 +291,11 @@ code { font-family: var(--vscode-editor-font-family); }
     $('previewExecute').addEventListener('click', addPreviewToQueue);
 
     // Queue panel events
-    $('queueHeader').addEventListener('click', toggleQueueCollapse);
+    $('queueHeader').addEventListener('click', (e) => {
+      // Don't toggle collapse when clicking action buttons inside the header
+      if (e.target.closest('.queue-actions')) return;
+      toggleQueueCollapse();
+    });
     $('queueExecute').addEventListener('click', showQueueConfirm);
     $('queueClear').addEventListener('click', clearQueue);
     $('queueConfirmYes').addEventListener('click', executeQueue);
@@ -712,23 +716,22 @@ code { font-family: var(--vscode-editor-font-family); }
     }
 
     function renderQueue() {
+      // During execution, renderDeletionProgress owns the entire panel
+      if (queueExecuting) return;
+
       const panel = $('queuePanel');
       const count = deletionQueue.length;
       $('queueCount').textContent = count;
 
-      // Always show once items have been added (or during execution)
-      if (count > 0 || queueExecuting) {
+      if (count > 0) {
         panel.style.display = '';
       } else {
         panel.style.display = 'none';
         return;
       }
 
-      $('queueExecute').disabled = count === 0 || queueExecuting;
-      $('queueClear').disabled = queueExecuting;
-
-      // During execution, renderDeletionProgress manages the item list
-      if (queueExecuting) return;
+      $('queueExecute').disabled = count === 0;
+      $('queueClear').disabled = false;
 
       const itemsEl = $('queueItems');
       const emptyEl = $('queueEmpty');
@@ -751,17 +754,15 @@ code { font-family: var(--vscode-editor-font-family); }
         div.innerHTML = '<span class="queue-item-name"><code>' + escapeHtml(item.name) + '</code> '
           + '<span class="deletion-kind-badge">' + escapeHtml(kindLabel) + '</span></span>';
 
-        if (!queueExecuting) {
-          const removeBtn = document.createElement('button');
-          removeBtn.className = 'queue-item-remove';
-          removeBtn.textContent = '✕';
-          removeBtn.dataset.index = i;
-          removeBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            removeFromQueue(parseInt(e.currentTarget.dataset.index));
-          });
-          div.appendChild(removeBtn);
-        }
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'queue-item-remove';
+        removeBtn.textContent = '✕';
+        removeBtn.dataset.index = i;
+        removeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          removeFromQueue(parseInt(e.currentTarget.dataset.index));
+        });
+        div.appendChild(removeBtn);
 
         itemsEl.appendChild(div);
       }
@@ -831,9 +832,8 @@ code { font-family: var(--vscode-editor-font-family); }
         itemsEl.appendChild(div);
       }
 
-      // When done, reset queue state
+      // When done, keep results visible until user clicks Clear
       if (allDone) {
-        deletionQueue = [];
         $('queueTitle').textContent = I18N.deletionCompleteTitle || 'Deletion Complete';
       }
     }
