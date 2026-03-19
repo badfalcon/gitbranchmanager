@@ -63,6 +63,18 @@ code { font-family: var(--vscode-editor-font-family); }
 .regex-toggle:hover { background: var(--vscode-button-secondaryHoverBackground); }
 .regex-toggle input { display: none; }
 .regex-toggle.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-focusBorder); }
+
+/* Deletion queue progress */
+.deletion-progress-summary { margin-bottom: 12px; font-size: 12px; display: flex; gap: 16px; align-items: center; }
+.deletion-progress-failed { color: var(--vscode-errorForeground, #f44336); }
+.deletion-status-icon { display: inline-block; width: 16px; text-align: center; }
+.deletion-success { color: var(--vscode-testing-iconPassed, #4caf50); }
+.deletion-failed { color: var(--vscode-errorForeground, #f44336); }
+.deletion-pending { opacity: 0.4; }
+.deletion-error-msg { font-size: 10px; color: var(--vscode-errorForeground); margin-left: 4px; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+.deletion-deleting { animation: pulse 1s infinite; font-weight: bold; }
+.deletion-kind-badge { font-size: 10px; padding: 1px 6px; border-radius: 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
 </style>
 </head>
 <body>
@@ -256,6 +268,8 @@ code { font-family: var(--vscode-editor-font-family); }
       if (currentState) render(currentState);
     }
 
+    let deletionInProgress = false;
+
     window.addEventListener('message', (e) => {
       const msg = e.data;
       if (msg.type === 'state') {
@@ -264,6 +278,8 @@ code { font-family: var(--vscode-editor-font-family); }
         render(msg.state);
       } else if (msg.type === 'error') {
         errEl.textContent = msg.message || I18N.errorFallback;
+      } else if (msg.type === 'deletionProgress') {
+        renderDeletionProgress(msg.items);
       }
     });
 
@@ -585,7 +601,85 @@ code { font-family: var(--vscode-editor-font-family); }
       }
     }
 
+    function renderDeletionProgress(items) {
+      const completed = items.filter(i => i.status === 'deleted').length;
+      const failed = items.filter(i => i.status === 'failed').length;
+      const total = items.length;
+      const allDone = items.every(i => i.status === 'deleted' || i.status === 'failed');
+
+      deletionInProgress = !allDone;
+
+      // Show the modal
+      $('previewOverlay').style.display = 'block';
+      $('previewPanel').style.display = 'block';
+
+      // Update title
+      $('previewTitle').textContent = allDone
+        ? (I18N.deletionCompleteTitle || 'Deletion Complete')
+        : (I18N.deletionProgressTitle || 'Deleting...');
+
+      // Hide preview-specific elements
+      $('includeRemote').parentElement.style.display = 'none';
+      $('previewExecute').style.display = 'none';
+      $('previewCancel').style.display = allDone ? '' : 'none';
+      $('previewCancel').textContent = allDone ? (I18N.previewCancel || 'Close') : '';
+
+      // Render progress table
+      const table = $('previewTable');
+      table.innerHTML = '';
+
+      // Summary row
+      const summaryRow = document.createElement('tr');
+      let summaryHtml = '<td colspan="3" class="deletion-progress-summary">'
+        + '<span>' + escapeHtml((I18N.deletionProgressCount || '{0} / {1} completed').replace('{0}', completed + failed).replace('{1}', total)) + '</span>';
+      if (failed > 0) {
+        summaryHtml += '<span class="deletion-progress-failed">' + escapeHtml((I18N.deletionFailedCount || '{0} failed').replace('{0}', failed)) + '</span>';
+      }
+      summaryHtml += '</td>';
+      summaryRow.innerHTML = summaryHtml;
+      table.appendChild(summaryRow);
+
+      // Header
+      const header = document.createElement('tr');
+      header.innerHTML = '<th></th><th>' + escapeHtml(I18N.localHeaderName) + '</th><th></th>';
+      table.appendChild(header);
+
+      // Items
+      for (const item of items) {
+        const tr = document.createElement('tr');
+        let statusIcon = '';
+        let rowClass = '';
+
+        if (item.status === 'pending') {
+          statusIcon = '<span class="deletion-status-icon deletion-pending">○</span>';
+          rowClass = 'deletion-pending';
+        } else if (item.status === 'deleting') {
+          statusIcon = '<span class="deletion-status-icon deletion-deleting">◉</span>';
+          rowClass = 'deletion-deleting';
+        } else if (item.status === 'deleted') {
+          statusIcon = '<span class="deletion-status-icon deletion-success">✓</span>';
+        } else if (item.status === 'failed') {
+          statusIcon = '<span class="deletion-status-icon deletion-failed">✗</span>';
+        }
+
+        if (rowClass) tr.className = rowClass;
+
+        let nameCell = '<code>' + escapeHtml(item.name) + '</code> '
+          + '<span class="deletion-kind-badge">' + escapeHtml(item.kind) + '</span>';
+
+        if (item.status === 'failed' && item.error) {
+          nameCell += '<br/><span class="deletion-error-msg">' + escapeHtml(item.error) + '</span>';
+        }
+
+        tr.innerHTML = '<td>' + statusIcon + '</td>'
+          + '<td>' + nameCell + '</td>'
+          + '<td></td>';
+        table.appendChild(tr);
+      }
+    }
+
     function closePreview() {
+      if (deletionInProgress) return;
       $('previewOverlay').style.display = 'none';
       $('previewPanel').style.display = 'none';
     }

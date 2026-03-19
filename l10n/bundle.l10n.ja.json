@@ -113,5 +113,10 @@
   "Search branches...": "ブランチを検索...",
   "Match Case": "大文字/小文字を区別",
   "Use Regular Expression": "正規表現を使用",
-  "Settings": "設定"
+  "Settings": "設定",
+
+  "Deleting...": "削除中...",
+  "Deletion Complete": "削除完了",
+  "{0} / {1} completed": "{0} / {1} 完了",
+  "{0} failed": "{0} 件失敗"
 }

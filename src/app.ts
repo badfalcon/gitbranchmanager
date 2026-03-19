@@ -60,6 +60,13 @@ export type WebviewMessage =
   // Select mode
   | { type: 'deleteSelectedBranches'; localBranches: string[]; remoteBranches: string[] };
 
+export type DeletionQueueItem = {
+  name: string;
+  kind: 'local' | 'remote';
+  status: 'pending' | 'deleting' | 'deleted' | 'failed';
+  error?: string;
+};
+
 // =====================
 // Config
 // =====================

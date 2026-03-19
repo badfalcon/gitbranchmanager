@@ -113,5 +113,10 @@
   "Search branches...": "Search branches...",
   "Match Case": "Match Case",
   "Use Regular Expression": "Use Regular Expression",
-  "Settings": "Settings"
+  "Settings": "Settings",
+
+  "Deleting...": "Deleting...",
+  "Deletion Complete": "Deletion Complete",
+  "{0} / {1} completed": "{0} / {1} completed",
+  "{0} failed": "{0} failed"
 }
