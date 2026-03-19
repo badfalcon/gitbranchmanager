@@ -727,10 +727,13 @@ code { font-family: var(--vscode-editor-font-family); }
       $('queueExecute').disabled = count === 0 || queueExecuting;
       $('queueClear').disabled = queueExecuting;
 
+      // During execution, renderDeletionProgress manages the item list
+      if (queueExecuting) return;
+
       const itemsEl = $('queueItems');
       const emptyEl = $('queueEmpty');
 
-      if (count === 0 && !queueExecuting) {
+      if (count === 0) {
         itemsEl.innerHTML = '';
         emptyEl.style.display = '';
         return;
