@@ -518,7 +518,9 @@ code { font-family: var(--vscode-editor-font-family); }
 
       // Reset modal state from possible previous deletion progress
       $('previewExecute').style.display = '';
+      $('previewExecute').disabled = false;
       $('previewCancel').style.display = '';
+      $('previewCancel').disabled = false;
       $('previewCancel').textContent = I18N.previewCancel;
       $('previewTitle').textContent = I18N.previewTitle;
       deletionInProgress = false;
@@ -701,6 +703,10 @@ code { font-family: var(--vscode-editor-font-family); }
         closePreview();
         return;
       }
+
+      // Disable controls while waiting for extension to start processing
+      $('previewExecute').disabled = true;
+      $('previewCancel').disabled = true;
 
       if (cleanupMode === 'remote') {
         vscode.postMessage({ type: 'executeRemoteCleanup', branches });

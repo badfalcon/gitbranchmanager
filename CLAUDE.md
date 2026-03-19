@@ -40,7 +40,7 @@ The extension follows a layered architecture:
 ### **Core Application Logic** ([src/app.ts](src/app.ts))
 Main TypeScript module containing:
 
-- **Types**: `BranchRow`, `BranchKind`, `WebviewMessage`, `ExtensionConfig`, `RepoContext`, `CleanupFilter`
+- **Types**: `BranchRow`, `BranchKind`, `WebviewMessage`, `ExtensionConfig`, `RepoContext`, `CleanupFilter`, `DeletionQueueItem`
 - **Configuration**: `getCfg()` reads VS Code settings (`gitSouji.*`)
 - **Git Operations**: Pure functions that wrap `runGit()` calls:
   - **Queries**: `listLocalBranches()`, `listRemoteBranches()`, `getCurrentBranch()`, `resolveBaseBranch()`
@@ -140,6 +140,14 @@ Main TypeScript module containing:
 - For **untracked branches**: prompts "Also delete X remote branches with same name (not tracked)?"
 - If confirmed, attempts to delete `origin/<branch-name>`
 
+**Deletion Queue (bulk operations)**:
+- All bulk deletion paths (`executeCleanup`, `executeRemoteCleanup`, `deleteSelectedBranches`) use a queue-based system
+- Extension sends `deletionProgress` messages to webview with per-branch status updates
+- Each `DeletionQueueItem` tracks: `name`, `kind` (local/remote), `status` (pending/deleting/deleted/failed), optional `error`
+- Webview shows real-time progress in the preview modal (reused from cleanup preview)
+- Modal is locked during deletion (close button disabled, overlay click blocked)
+- Force-delete retry transitions failed items back to pending before retrying
+
 ### Select Mode
 - Toggle "Select" button to enter select mode
 - Checkboxes appear on selectable branch rows (hidden for current/protected branches)
@@ -189,6 +197,7 @@ Two-way message flow between extension and webview:
 **Extension → Webview (State)**:
 - `{ type: 'state'; state: { locals: BranchRow[]; remotes: BranchRow[]; current?: string; repoRoot: string; showStatusBadges?: boolean; allowRemoteBranchDeletion?: boolean } }` - branch list with status
 - `{ type: 'error'; message: string }` - error notification
+- `{ type: 'deletionProgress'; items: DeletionQueueItem[] }` - real-time deletion queue progress
 
 ## Testing
 
