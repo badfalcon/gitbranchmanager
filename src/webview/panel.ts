@@ -576,19 +576,29 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
 
             // Build a detail string listing all queued branches so the user
             // can review them even though the queue panel is hidden behind the
-            // confirmation dialog.
+            // confirmation dialog.  Truncate to avoid overflow in VS Code's
+            // modal which has limited vertical space.
             if (cfg.confirmBeforeDelete) {
-              const lines: string[] = [];
+              const allItems: { name: string; label: string }[] = [];
               for (const it of localItems) {
-                lines.push(`  ${(it as { name: string }).name}  (${vscode.l10n.t('local')})`);
+                allItems.push({ name: (it as { name: string }).name, label: vscode.l10n.t('local') });
               }
               for (const it of includeRemoteItems) {
-                lines.push(`  ${(it as { name: string }).name}  (${vscode.l10n.t('local')} + ${vscode.l10n.t('remote')})`);
+                allItems.push({ name: (it as { name: string }).name, label: `${vscode.l10n.t('local')} + ${vscode.l10n.t('remote')}` });
               }
               for (const it of remoteItems) {
-                lines.push(`  ${(it as { name: string }).name}  (${vscode.l10n.t('remote')})`);
+                allItems.push({ name: (it as { name: string }).name, label: vscode.l10n.t('remote') });
               }
-              const total = localItems.length + includeRemoteItems.length + remoteItems.length;
+
+              const maxLines = 20;
+              const lines = allItems.slice(0, maxLines).map(
+                i => `  ${i.name}  (${i.label})`
+              );
+              if (allItems.length > maxLines) {
+                lines.push(`  ... +${allItems.length - maxLines}`);
+              }
+
+              const total = allItems.length;
               const yes = vscode.l10n.t('Yes');
               const pick = await vscode.window.showWarningMessage(
                 vscode.l10n.t('Delete {0} selected branches?', total),
