@@ -590,7 +590,7 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
                 allItems.push({ name: (it as { name: string }).name, label: vscode.l10n.t('remote') });
               }
 
-              const maxLines = 20;
+              const maxLines = 10;
               const lines = allItems.slice(0, maxLines).map(
                 i => `  ${i.name}  (${i.label})`
               );
