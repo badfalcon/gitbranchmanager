@@ -113,6 +113,9 @@ export function simpleBranchNameValidator(input?: string) {
   if (input.includes('..') || input.includes('//')) {
     return vscode.l10n.t("'..' and consecutive '/' are not allowed.");
   }
+  if (input.includes('@{')) {
+    return vscode.l10n.t("'@{' is not allowed in branch names.");
+  }
   return undefined;
 }
 
@@ -462,7 +465,7 @@ export async function detectDeadBranches(cwd: string, base: string): Promise<str
 
   const names = lines.map((l) => l.replace(/^\*\s+/, '')).map((n) => n.replace(/^\(no branch\)$/, ''));
 
-  return names.filter((n) => !!n && n !== current && !isProtectedBranch(n, cfg.protected));
+  return names.filter((n) => !!n && n !== current && n !== base && !isProtectedBranch(n, cfg.protected));
 }
 
 /**
@@ -635,8 +638,11 @@ export async function detectMergedRemoteBranches(cwd: string, base: string): Pro
   const merged = new Set<string>();
   for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
     const name = line.trim();
-    // Skip HEAD pointers and the base branch itself
-    if (name && !name.endsWith('/HEAD') && name !== base) {
+    // Skip HEAD pointers and the base branch itself.
+    // base is typically a short name ("main"), but could be "origin/main" if user configured it.
+    // name is always in "origin/main" form, so compare both ways.
+    const branchNameWithoutRemote = name.split('/').slice(1).join('/');
+    if (name && !name.endsWith('/HEAD') && branchNameWithoutRemote !== base && name !== base) {
       merged.add(name);
     }
   }

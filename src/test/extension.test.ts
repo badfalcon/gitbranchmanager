@@ -128,6 +128,8 @@ suite('Unit functions', () => {
   test('simpleBranchNameValidator: invalid patterns', () => {
     assert.ok(simpleBranchNameValidator('feature..test'));
     assert.ok(simpleBranchNameValidator('feature//test'));
+    assert.ok(simpleBranchNameValidator('feature@{test'));
+    assert.ok(simpleBranchNameValidator('@{upstream}'));
   });
 
   test('simpleBranchNameValidator: valid names', () => {
@@ -409,7 +411,7 @@ suite('Git functions (mocked)', () => {
       ].join('\n'),
     });
 
-    const merged = await detectMergedRemoteBranches('/fake/repo', 'origin/main');
+    const merged = await detectMergedRemoteBranches('/fake/repo', 'main');
 
     // Should exclude HEAD and the base branch itself
     assert.strictEqual(merged.size, 2);
@@ -727,7 +729,7 @@ suite('Git functions (mocked)', () => {
       return Promise.resolve({ stdout: '' });
     });
 
-    const branches = await listRemoteBranchesWithStatus('/fake/repo', 'origin/main', 30);
+    const branches = await listRemoteBranchesWithStatus('/fake/repo', 'main', 30);
 
     // HEAD should be filtered out
     assert.strictEqual(branches.length, 3);
