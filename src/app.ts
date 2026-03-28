@@ -57,8 +57,6 @@ export type WebviewMessage =
   | { type: 'executeCleanup'; branches: string[]; includeRemote: boolean }
   | { type: 'executeRemoteCleanup'; branches: string[] }
   | { type: 'cancelCleanup' }
-  // Select mode
-  | { type: 'deleteSelectedBranches'; localBranches: string[]; remoteBranches: string[] }
   // Deletion queue
   | { type: 'executeDeletionQueue'; items: { name: string; kind: 'local' | 'remote' | 'includeRemote' }[] };
 

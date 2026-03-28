@@ -149,8 +149,8 @@ Main TypeScript module containing:
 - Queue panel shows all pending items with `✕` buttons for individual removal
 - "Execute" button sends all queued items to extension via `executeDeletionQueue` message
 - Extension processes queue with real-time `deletionProgress` updates rendered in queue panel
-- Each `DeletionQueueItem` tracks: `name`, `kind` (local/remote/includeRemote), `status` (pending/deleting/deleted/failed), optional `error`
-- `includeRemote` kind: local branches whose remote counterpart should also be deleted (resolved via upstream map)
+- Each `DeletionQueueItem` tracks: `name`, `kind` (local/remote), `status` (pending/deleting/deleted/failed), optional `error`
+- `includeRemote` kind in wire protocol: local branches whose remote counterpart should also be deleted (resolved via upstream map); converted to separate local + remote `DeletionQueueItem`s during execution
 - Force-delete retry transitions failed items back to pending before retrying
 - Single delete operations (per-row Delete button) bypass the queue and execute immediately
 
@@ -198,7 +198,6 @@ Two-way message flow between extension and webview:
 - `{ type: 'deleteRemote'; remote: string; name: string }` - delete remote branch
 - `{ type: 'executeCleanup'; branches: string[]; includeRemote: boolean }` - bulk delete local branches (with optional remote)
 - `{ type: 'executeRemoteCleanup'; branches: string[] }` - bulk delete remote branches
-- `{ type: 'deleteSelectedBranches'; localBranches: string[]; remoteBranches: string[] }` - delete selected branches from select mode
 - `{ type: 'executeDeletionQueue'; items: { name: string; kind: 'local' | 'remote' | 'includeRemote' }[] }` - execute deletion queue
 
 **Extension → Webview (State)**:

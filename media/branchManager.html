@@ -65,7 +65,7 @@ code { font-family: var(--vscode-editor-font-family); }
 .regex-toggle.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-focusBorder); }
 
 /* Deletion queue panel (sticky bottom) */
-.queue-panel { position: sticky; bottom: 0; background: var(--vscode-sideBar-background); border-top: 2px solid var(--vscode-focusBorder); margin-top: 24px; z-index: 50; }
+.queue-panel { position: sticky; bottom: 0; background: var(--vscode-sideBar-background); border-top: 2px solid var(--vscode-focusBorder); margin-top: 24px; z-index: 50; display: flex; flex-direction: column; max-height: 50vh; }
 .queue-resize-handle { height: 5px; cursor: ns-resize; background: transparent; display: flex; align-items: center; justify-content: center; }
 .queue-resize-handle:hover, .queue-resize-handle.active { background: var(--vscode-focusBorder); opacity: 0.4; }
 .queue-resize-handle::after { content: ''; width: 32px; height: 2px; border-radius: 1px; background: var(--vscode-descriptionForeground); opacity: 0.5; }
@@ -77,13 +77,16 @@ code { font-family: var(--vscode-editor-font-family); }
 .queue-confirm { display: flex; align-items: center; gap: 8px; flex: 1; }
 .queue-confirm-msg { flex: 1; font-size: 12px; font-weight: bold; }
 .queue-confirm-actions { display: flex; gap: 6px; }
-.queue-body { max-height: 200px; overflow-y: auto; padding: 0 12px 8px; }
+.queue-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 8px; }
 .queue-body.collapsed { display: none; }
 .queue-empty { text-align: center; padding: 12px; color: var(--vscode-descriptionForeground); font-size: 11px; }
-.queue-item { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 12px; }
+.queue-item { display: flex; align-items: center; gap: 4px; padding: 3px 0; font-size: 12px; }
 .queue-item-name { flex: 1; }
-.queue-item-remove { cursor: pointer; opacity: 0.6; border: none; background: none; color: var(--vscode-foreground); font-size: 14px; padding: 0 4px; }
-.queue-item-remove:hover { opacity: 1; color: var(--vscode-errorForeground); }
+.queue-item-remove { cursor: pointer; border: none; background: none; color: var(--vscode-foreground); font-size: 14px; padding: 0 4px; opacity: 0; width: 20px; flex-shrink: 0; order: -1; }
+.queue-item:hover .queue-item-remove { opacity: 0.6; }
+.queue-item .queue-item-remove:hover { opacity: 1; color: var(--vscode-errorForeground); }
+.queue-item-done { opacity: 0.5; }
+.queue-item-done code { text-decoration: line-through; }
 .queue-toast { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); padding: 6px 16px; border-radius: 4px; font-size: 12px; z-index: 200; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
 .queue-toast.visible { opacity: 1; }
 
@@ -109,7 +112,7 @@ code { font-family: var(--vscode-editor-font-family); }
     <span id="error" style="color: var(--vscode-errorForeground);"></span>
     <div class="select-actions hidden" id="selectActions">
       <span class="select-count" id="selectCount"></span>
-      <button class="btn danger" id="deleteSelected"></button>
+      <button class="btn primary" id="deleteSelected"></button>
     </div>
     <div class="toolbar-spacer"></div>
     <button class="btn btn-icon" id="openSettings" title=""><svg viewBox="0 0 16 16"><path d="M9.1 4.4L8.6 2H7.4l-.5 2.4-.7.3-2-1.3-.9.8 1.3 2-.2.7-2.4.5v1.2l2.4.5.3.8-1.3 2 .8.8 2-1.3.8.3.4 2.3h1.2l.5-2.4.8-.3 2 1.3.8-.8-1.3-2 .3-.8 2.3-.4V7.4l-2.4-.5-.3-.8 1.3-2-.8-.8-2 1.3-.7-.2zM9.4 1l.5 2.4L12 2.1l2 2-1.4 2.1 2.4.4v2.8l-2.4.5L14 12l-2 2-2.1-1.4-.5 2.4H6.6l-.5-2.4L4 13.9l-2-2 1.4-2.1L1 9.4V6.6l2.4-.5L2.1 4l2-2 2.1 1.4.4-2.4h2.8zm.6 7a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm1 0a3 3 0 1 0-6 0 3 3 0 0 0 6 0z"/></svg></button>
@@ -233,7 +236,7 @@ code { font-family: var(--vscode-editor-font-family); }
     $('refresh').textContent = I18N.refresh;
     $('create').textContent = I18N.create;
     $('selectMode').textContent = I18N.selectMode;
-    $('deleteSelected').textContent = I18N.previewAddToQueue || 'Add to Queue';
+    $('deleteSelected').textContent = I18N.previewAddToQueue;
     $('localTitle').textContent = I18N.localBranches;
     $('remoteTitle').textContent = I18N.remoteBranches;
 
@@ -252,23 +255,23 @@ code { font-family: var(--vscode-editor-font-family); }
 
     // Preview panel labels
     $('previewTitle').textContent = I18N.previewTitle;
-    $('includeRemoteLabel').textContent = I18N.queueIncludeRemote || I18N.previewIncludeRemote;
+    $('includeRemoteLabel').textContent = I18N.queueIncludeRemote;
     $('previewCancel').textContent = I18N.previewCancel;
-    $('previewExecute').textContent = I18N.previewAddToQueue || 'Add to Queue';
+    $('previewExecute').textContent = I18N.previewAddToQueue;
 
     // Queue panel labels
-    $('queueTitle').textContent = I18N.queueTitle || 'Deletion Queue';
-    $('queueExecute').textContent = I18N.queueExecute || 'Execute';
-    $('queueClear').textContent = I18N.queueClear || 'Clear';
-    $('queueEmpty').textContent = I18N.queueEmpty || 'Queue is empty.';
-    $('queueConfirmYes').textContent = I18N.queueConfirmYes || 'Delete';
-    $('queueConfirmCancel').textContent = I18N.queueConfirmCancel || 'Cancel';
+    $('queueTitle').textContent = I18N.queueTitle;
+    $('queueExecute').textContent = I18N.queueExecute;
+    $('queueClear').textContent = I18N.queueClear;
+    $('queueEmpty').textContent = I18N.queueEmpty;
+    $('queueConfirmYes').textContent = I18N.queueConfirmYes;
+    $('queueConfirmCancel').textContent = I18N.queueConfirmCancel;
 
     // Search placeholders and tooltips
-    $('searchInput').placeholder = I18N.searchPlaceholder || 'Search branches...';
-    $('caseToggle').title = I18N.searchCaseSensitive || 'Match Case';
-    $('regexToggle').title = I18N.searchUseRegex || 'Use Regular Expression';
-    $('openSettings').title = I18N.openSettings || 'Settings';
+    $('searchInput').placeholder = I18N.searchPlaceholder;
+    $('caseToggle').title = I18N.searchCaseSensitive;
+    $('regexToggle').title = I18N.searchUseRegex;
+    $('openSettings').title = I18N.openSettings;
 
     // Event listeners
     $('refresh').addEventListener('click', () => vscode.postMessage({ type: 'refresh' }));
@@ -305,21 +308,22 @@ code { font-family: var(--vscode-editor-font-family); }
     $('queueConfirmYes').addEventListener('click', executeQueue);
     $('queueConfirmCancel').addEventListener('click', hideQueueConfirm);
 
-    // Queue resize handle
+    // Queue resize handle — drags to set fixed height on the entire panel
     {
       const handle = $('queueResizeHandle');
-      const body = $('queueBody');
+      const panel = $('queuePanel');
       let startY = 0, startH = 0;
       handle.addEventListener('mousedown', (e) => {
         e.preventDefault();
         startY = e.clientY;
-        startH = body.offsetHeight;
+        startH = panel.getBoundingClientRect().height;
         handle.classList.add('active');
         const onMove = (e) => {
           const delta = startY - e.clientY; // dragging up = bigger
-          const h = Math.max(60, Math.min(startH + delta, window.innerHeight * 0.7));
-          body.style.maxHeight = h + 'px';
-          if (queueCollapsed) { queueCollapsed = false; body.classList.remove('collapsed'); }
+          const h = Math.max(60, Math.min(startH + delta, window.innerHeight * 0.8));
+          panel.style.height = h + 'px';
+          panel.style.maxHeight = 'none';
+          if (queueCollapsed) { queueCollapsed = false; $('queueBody').classList.remove('collapsed'); }
         };
         const onUp = () => {
           handle.classList.remove('active');
@@ -374,6 +378,10 @@ code { font-family: var(--vscode-editor-font-family); }
         render(msg.state);
       } else if (msg.type === 'error') {
         errEl.textContent = msg.message || I18N.errorFallback;
+        if (queueExecuting) {
+          queueExecuting = false;
+          renderQueue();
+        }
       } else if (msg.type === 'deletionProgress') {
         renderDeletionProgress(msg.items);
       }
@@ -720,7 +728,7 @@ code { font-family: var(--vscode-editor-font-family); }
       for (const item of items) {
         const exists = deletionQueue.some(q => q.name === item.name && q.kind === item.kind);
         if (!exists) {
-          deletionQueue.push({ name: item.name, kind: item.kind });
+          deletionQueue.push({ name: item.name, kind: item.kind, includeRemote: !!item.includeRemote });
           added++;
         }
       }
@@ -752,6 +760,10 @@ code { font-family: var(--vscode-editor-font-family); }
       const panel = $('queuePanel');
       const count = deletionQueue.length;
       $('queueCount').textContent = count;
+      $('queueTitle').textContent = I18N.queueTitle;
+      // Reset user-resized panel height so it auto-sizes to content
+      $('queuePanel').style.height = '';
+      $('queuePanel').style.maxHeight = '';
 
       if (count > 0) {
         panel.style.display = '';
@@ -760,39 +772,38 @@ code { font-family: var(--vscode-editor-font-family); }
         return;
       }
 
-      $('queueExecute').disabled = count === 0;
+      const pendingCount = deletionQueue.filter(q => !q.done).length;
+      $('queueExecute').disabled = pendingCount === 0;
       $('queueClear').disabled = false;
 
       const itemsEl = $('queueItems');
-      const emptyEl = $('queueEmpty');
-
-      if (count === 0) {
-        itemsEl.innerHTML = '';
-        emptyEl.style.display = '';
-        return;
-      }
-
-      emptyEl.style.display = 'none';
+      $('queueEmpty').style.display = 'none';
       itemsEl.innerHTML = '';
 
       for (let i = 0; i < deletionQueue.length; i++) {
         const item = deletionQueue[i];
         const div = document.createElement('div');
-        div.className = 'queue-item';
+        div.className = 'queue-item' + (item.done ? ' queue-item-done' : '');
 
-        const kindLabel = item.kind === 'local' ? (I18N.deletionKindLocal || 'local') : (I18N.deletionKindRemote || 'remote');
-        div.innerHTML = '<span class="queue-item-name"><code>' + escapeHtml(item.name) + '</code> '
+        let kindLabel = item.kind === 'local' ? I18N.deletionKindLocal : I18N.deletionKindRemote;
+        if (item.includeRemote) {
+          kindLabel += ' + ' + I18N.deletionKindRemote;
+        }
+        const statusIcon = item.done ? '<span class="deletion-status-icon deletion-success">✓</span>' : '';
+        div.innerHTML = statusIcon + '<span class="queue-item-name"><code>' + escapeHtml(item.name) + '</code> '
           + '<span class="deletion-kind-badge">' + escapeHtml(kindLabel) + '</span></span>';
 
-        const removeBtn = document.createElement('button');
-        removeBtn.className = 'queue-item-remove';
-        removeBtn.textContent = '✕';
-        removeBtn.dataset.index = i;
-        removeBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          removeFromQueue(parseInt(e.currentTarget.dataset.index));
-        });
-        div.appendChild(removeBtn);
+        if (!item.done) {
+          const removeBtn = document.createElement('button');
+          removeBtn.className = 'queue-item-remove';
+          removeBtn.textContent = '✕';
+          removeBtn.dataset.index = i;
+          removeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            removeFromQueue(parseInt(e.currentTarget.dataset.index));
+          });
+          div.appendChild(removeBtn);
+        }
 
         itemsEl.appendChild(div);
       }
@@ -806,16 +817,19 @@ code { font-family: var(--vscode-editor-font-family); }
 
       queueExecuting = !allDone;
 
-      // Ensure queue panel is visible and expanded
+      // Ensure queue panel is visible and expanded; reset user-resized height
       $('queuePanel').style.display = '';
+      $('queuePanel').style.height = '';
+      $('queuePanel').style.maxHeight = '';
       queueCollapsed = false;
       $('queueBody').classList.remove('collapsed');
 
       // Update header
       $('queueTitle').textContent = allDone
-        ? (I18N.deletionCompleteTitle || 'Deletion Complete')
-        : (I18N.deletionProgressTitle || 'Deleting...');
-      $('queueCount').textContent = total;
+        ? I18N.deletionCompleteTitle
+        : I18N.deletionProgressTitle;
+      const prevDoneCount = deletionQueue.filter(q => q.done).length;
+      $('queueCount').textContent = prevDoneCount + total;
       $('queueExecute').disabled = true;
       $('queueClear').disabled = !allDone;
 
@@ -823,17 +837,33 @@ code { font-family: var(--vscode-editor-font-family); }
       $('queueEmpty').style.display = 'none';
       itemsEl.innerHTML = '';
 
-      // Summary
+      // Previously completed items from earlier executions (exclude current batch)
+      const currentNames = new Set(items.map(i => i.name + ':' + i.kind));
+      const prevDone = deletionQueue.filter(q => q.done && !currentNames.has(q.name + ':' + q.kind));
+      for (const item of prevDone) {
+        const div = document.createElement('div');
+        div.className = 'queue-item queue-item-done';
+        let kindLabel = item.kind === 'local' ? I18N.deletionKindLocal : I18N.deletionKindRemote;
+        if (item.includeRemote) {
+          kindLabel += ' + ' + I18N.deletionKindRemote;
+        }
+        div.innerHTML = '<span class="deletion-status-icon deletion-success">✓</span>'
+          + '<span class="queue-item-name"><code>' + escapeHtml(item.name) + '</code> '
+          + '<span class="deletion-kind-badge">' + escapeHtml(kindLabel) + '</span></span>';
+        itemsEl.appendChild(div);
+      }
+
+      // Summary for current execution
       const summary = document.createElement('div');
       summary.className = 'deletion-progress-summary';
-      let summaryHtml = '<span>' + escapeHtml((I18N.deletionProgressCount || '{0} / {1} completed').replace('{0}', completed).replace('{1}', total)) + '</span>';
+      let summaryHtml = '<span>' + escapeHtml(I18N.deletionProgressCount.replace('{0}', completed).replace('{1}', total)) + '</span>';
       if (failed > 0) {
-        summaryHtml += '<span class="deletion-progress-failed">' + escapeHtml((I18N.deletionFailedCount || '{0} failed').replace('{0}', failed)) + '</span>';
+        summaryHtml += '<span class="deletion-progress-failed">' + escapeHtml(I18N.deletionFailedCount.replace('{0}', failed)) + '</span>';
       }
       summary.innerHTML = summaryHtml;
       itemsEl.appendChild(summary);
 
-      // Items
+      // Current execution items
       for (const item of items) {
         const div = document.createElement('div');
         div.className = 'queue-item';
@@ -851,7 +881,7 @@ code { font-family: var(--vscode-editor-font-family); }
           statusIcon = '<span class="deletion-status-icon deletion-failed">✗</span>';
         }
 
-        const kindLabel = item.kind === 'local' ? (I18N.deletionKindLocal || 'local') : (I18N.deletionKindRemote || 'remote');
+        const kindLabel = item.kind === 'local' ? I18N.deletionKindLocal : I18N.deletionKindRemote;
         let nameHtml = '<code>' + escapeHtml(item.name) + '</code> '
           + '<span class="deletion-kind-badge">' + escapeHtml(kindLabel) + '</span>';
         if (item.status === 'failed' && item.error) {
@@ -862,9 +892,13 @@ code { font-family: var(--vscode-editor-font-family); }
         itemsEl.appendChild(div);
       }
 
-      // When done, keep results visible until user clicks Clear
+      // When done, mark only items from this batch as done (not items added mid-execution)
       if (allDone) {
-        $('queueTitle').textContent = I18N.deletionCompleteTitle || 'Deletion Complete';
+        for (const q of deletionQueue) {
+          if (currentNames.has(q.name + ':' + q.kind)) {
+            q.done = true;
+          }
+        }
       }
     }
 
@@ -876,9 +910,10 @@ code { font-family: var(--vscode-editor-font-family); }
     }
 
     function showQueueConfirm() {
-      if (deletionQueue.length === 0 || queueExecuting) return;
-      const msg = (I18N.queueConfirmMsg || 'Delete {0} branches? This cannot be undone.')
-        .replace('{0}', deletionQueue.length);
+      const pendingCount = deletionQueue.filter(q => !q.done).length;
+      if (pendingCount === 0 || queueExecuting) return;
+      const msg = I18N.queueConfirmMsg
+        .replace('{0}', pendingCount);
       $('queueConfirmMsg').textContent = msg;
       $('queueConfirm').style.display = '';
       // Hide action buttons so the confirm bar occupies the same header area
@@ -894,13 +929,20 @@ code { font-family: var(--vscode-editor-font-family); }
     }
 
     function executeQueue() {
-      if (deletionQueue.length === 0 || queueExecuting) return;
+      const pending = deletionQueue.filter(q => !q.done);
+      if (pending.length === 0 || queueExecuting) return;
       hideQueueConfirm();
       queueExecuting = true;
-      renderQueue();
+      const wireItems = [];
+      for (const q of pending) {
+        wireItems.push({ name: q.name, kind: q.kind });
+        if (q.includeRemote) {
+          wireItems.push({ name: q.name, kind: 'includeRemote' });
+        }
+      }
       vscode.postMessage({
         type: 'executeDeletionQueue',
-        items: deletionQueue.map(q => ({ name: q.name, kind: q.kind })),
+        items: wireItems,
       });
     }
 
@@ -924,20 +966,14 @@ code { font-family: var(--vscode-editor-font-family); }
       }
 
       const kind = cleanupMode === 'remote' ? 'remote' : 'local';
-      const items = branches.map(name => ({ name, kind }));
-
-      // If local cleanup with "include remote" checked, also add remote counterparts
-      if (kind === 'local' && $('includeRemote').checked) {
-        for (const name of branches) {
-          items.push({ name, kind: 'includeRemote' });
-        }
-      }
+      const withRemote = kind === 'local' && $('includeRemote').checked;
+      const items = branches.map(name => ({ name, kind, includeRemote: withRemote }));
 
       const added = addToQueue(items);
       closePreview();
 
       if (added > 0) {
-        showToast((I18N.queueAddedCount || '{0} branches added to queue').replace('{0}', added));
+        showToast(I18N.queueAddedCount.replace('{0}', added));
       }
     }
 
@@ -980,7 +1016,7 @@ code { font-family: var(--vscode-editor-font-family); }
       ];
       const added = addToQueue(items);
       if (added > 0) {
-        showToast((I18N.queueAddedCount || '{0} branches added to queue').replace('{0}', added));
+        showToast(I18N.queueAddedCount.replace('{0}', added));
       }
 
       // Exit select mode

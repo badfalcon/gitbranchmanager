@@ -128,7 +128,5 @@
   "Queue is empty. Use Cleanup or Select mode to add branches.": "キューは空です。整理またはセレクトモードでブランチを追加してください。",
   "{0} branches added to queue": "{0} 件のブランチをキューに追加しました",
   "Add to Queue": "キューに追加",
-  "Also delete corresponding remote branches": "対応するリモートブランチも削除する",
-  "Delete {0} branches? This cannot be undone.": "{0} 件のブランチを削除しますか？この操作は取り消せません。",
-  "Delete": "削除"
+  "Delete {0} branches? This cannot be undone.": "{0} 件のブランチを削除しますか？この操作は取り消せません。"
 }
