@@ -40,7 +40,7 @@ The extension follows a layered architecture:
 ### **Core Application Logic** ([src/app.ts](src/app.ts))
 Main TypeScript module containing:
 
-- **Types**: `BranchRow`, `BranchKind`, `WebviewMessage`, `ExtensionConfig`, `RepoContext`, `CleanupFilter`, `DeletionQueueItem`
+- **Types**: `BranchRow`, `BranchKind`, `WebviewMessage`, `ExtensionConfig`, `RepoContext`, `DeletionQueueItem`
 - **Configuration**: `getCfg()` reads VS Code settings (`gitSouji.*`)
 - **Git Operations**: Pure functions that wrap `runGit()` calls:
   - **Queries**: `listLocalBranches()`, `listRemoteBranches()`, `getCurrentBranch()`, `resolveBaseBranch()`
@@ -196,8 +196,6 @@ Two-way message flow between extension and webview:
 - `{ type: 'deleteLocal'; name: string }` - delete local branch
 - `{ type: 'mergeIntoCurrent'; source: string }` - merge into current
 - `{ type: 'deleteRemote'; remote: string; name: string }` - delete remote branch
-- `{ type: 'executeCleanup'; branches: string[]; includeRemote: boolean }` - bulk delete local branches (with optional remote)
-- `{ type: 'executeRemoteCleanup'; branches: string[] }` - bulk delete remote branches
 - `{ type: 'executeDeletionQueue'; items: { name: string; kind: 'local' | 'remote' | 'includeRemote' }[] }` - execute deletion queue
 
 **Extension → Webview (State)**:

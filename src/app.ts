@@ -38,8 +38,6 @@ export type RepoContext = {
   repoRoot: string;
 };
 
-export type CleanupFilter = 'merged' | 'stale' | 'gone' | 'all';
-
 export type WebviewMessage =
   | { type: 'ready' }
   | { type: 'refresh' }
@@ -51,12 +49,6 @@ export type WebviewMessage =
   | { type: 'deleteLocal'; name: string }
   | { type: 'mergeIntoCurrent'; source: string }
   | { type: 'deleteRemote'; remote: string; name: string }
-  | { type: 'detectDead' }
-  // Cleanup preview messages
-  | { type: 'showCleanupPreview'; filter: CleanupFilter }
-  | { type: 'executeCleanup'; branches: string[]; includeRemote: boolean }
-  | { type: 'executeRemoteCleanup'; branches: string[] }
-  | { type: 'cancelCleanup' }
   // Deletion queue
   | { type: 'executeDeletionQueue'; items: { name: string; kind: 'local' | 'remote' | 'includeRemote' }[] };
 
