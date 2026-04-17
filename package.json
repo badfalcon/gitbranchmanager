@@ -41,7 +41,7 @@
       {
         "command": "gitsouji.openCleaner",
         "title": "%command.openCleaner.title%",
-        "icon": "$(git-branch)"
+        "icon": "$(sparkle)"
       }
     ],
     "configuration": {
