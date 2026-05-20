@@ -4,6 +4,36 @@ All notable changes to the "gitsouji" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [1.4.0] - 2026-05-20
+
+### Added
+
+- Deletion queue panel as a native VS Code TreeView in a dedicated Activity Bar container, replacing the in-webview sticky queue panel
+- Per-item status icons (pending / spinning / check / error) and inline remove action on queue items
+- View title actions: Execute, Clear, Switch Repository
+- "Switch Repository" command for multi-folder workspaces with last-repo persistence via `workspaceState`
+- Loading overlay shown while git state is being read on initial open and on refresh
+- Welcome view content with shortcut to open Git Souji when the queue is empty
+
+### Changed
+
+- Deletion queue state and execution moved from the webview to the extension side (`QueueTreeProvider`); the webview now stages items via `addToQueue` messages and shows a brief toast on success
+- Bulk deletion progress now reports via `vscode.window.withProgress` (Notification) plus per-item TreeItem updates instead of an in-webview progress list
+- Webview panel is recreated when switching repositories (previously reused, which kept stale state)
+- Repository picker no longer auto-selects in single-folder workspaces when invoked via "Switch Repository"
+- `openCleaner` command icon changed to `$(sparkle)`
+- Wire protocol: `executeDeletionQueue` replaced with `addToQueue`; `deletionProgress` replaced with `queueAdded`
+- `DeletionQueueItem` now uses an explicit `includeRemote?: boolean` flag instead of overloading the `kind` field
+
+### Removed
+
+- Obsolete `executeCleanup` / `executeRemoteCleanup` / `executeDeletionQueue` webview message handlers
+- In-webview sticky deletion queue panel, resize handle, and inline progress UI
+
+### Fixed
+
+- Race condition where the previous webview panel could leak after a repository switch — `activePanel` / `activeRepoRoot` are now cleared before disposing the stale panel
+
 ## [1.3.2] - 2026-03-19
 
 ### Fixed
