@@ -38,8 +38,6 @@ export type RepoContext = {
   repoRoot: string;
 };
 
-export type CleanupFilter = 'merged' | 'stale' | 'gone' | 'all';
-
 export type WebviewMessage =
   | { type: 'ready' }
   | { type: 'refresh' }
@@ -51,14 +49,17 @@ export type WebviewMessage =
   | { type: 'deleteLocal'; name: string }
   | { type: 'mergeIntoCurrent'; source: string }
   | { type: 'deleteRemote'; remote: string; name: string }
-  | { type: 'detectDead' }
-  // Cleanup preview messages
-  | { type: 'showCleanupPreview'; filter: CleanupFilter }
-  | { type: 'executeCleanup'; branches: string[]; includeRemote: boolean }
-  | { type: 'executeRemoteCleanup'; branches: string[] }
-  | { type: 'cancelCleanup' }
-  // Select mode
-  | { type: 'deleteSelectedBranches'; localBranches: string[]; remoteBranches: string[] };
+  // Deletion queue: webview stages branches; extension handles storage + execution
+  | { type: 'addToQueue'; items: { name: string; kind: 'local' | 'remote'; includeRemote?: boolean }[] };
+
+export type DeletionQueueItem = {
+  name: string;
+  kind: 'local' | 'remote';
+  /** For local items: also delete the corresponding remote branch */
+  includeRemote?: boolean;
+  status: 'pending' | 'deleting' | 'deleted' | 'failed';
+  error?: string;
+};
 
 // =====================
 // Config
@@ -125,7 +126,7 @@ export async function confirm(message: string) {
   return pick === yes;
 }
 
-async function isGitRepository(folderPath: string): Promise<boolean> {
+export async function isGitRepository(folderPath: string): Promise<boolean> {
   try {
     await runGit(folderPath, ['rev-parse', '--git-dir']);
     return true;
@@ -134,47 +135,38 @@ async function isGitRepository(folderPath: string): Promise<boolean> {
   }
 }
 
-export async function pickRepository(): Promise<RepoContext | undefined> {
+type WorkspaceRepo = { label: string; repoRoot: string };
+
+async function listWorkspaceRepos(): Promise<WorkspaceRepo[]> {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || folders.length === 0) {
-    return undefined;
+    return [];
   }
-
-  if (folders.length === 1) {
-    const repoRoot = folders[0].uri.fsPath;
-    if (!(await isGitRepository(repoRoot))) {
-      return undefined;
-    }
-    return { repoRoot };
-  }
-
   const picks = await Promise.all(
-    folders.map(async (f) => {
-      const repoRoot = f.uri.fsPath;
-      const ok = await isGitRepository(repoRoot);
-      return {
-        label: f.name,
-        description: repoRoot,
-        repoRoot,
-        ok,
-      };
-    })
+    folders.map(async (f) => ({
+      label: f.name,
+      repoRoot: f.uri.fsPath,
+      ok: await isGitRepository(f.uri.fsPath),
+    }))
   );
+  return picks.filter((p) => p.ok).map(({ label, repoRoot }) => ({ label, repoRoot }));
+}
 
-  const okPicks = picks.filter((p) => p.ok);
-  if (okPicks.length === 0) {
+export async function pickRepository(
+  options?: { forcePrompt?: boolean }
+): Promise<RepoContext | undefined> {
+  const repos = await listWorkspaceRepos();
+  if (repos.length === 0) {
     return undefined;
   }
-
+  if (repos.length === 1 && !options?.forcePrompt) {
+    return { repoRoot: repos[0].repoRoot };
+  }
   const chosen = await vscode.window.showQuickPick(
-    okPicks.map((p) => ({ label: p.label, description: p.description, repoRoot: p.repoRoot })),
+    repos.map((r) => ({ label: r.label, description: r.repoRoot, repoRoot: r.repoRoot })),
     { title: vscode.l10n.t('Select a Git repository') }
   );
-
-  if (!chosen) {
-    return undefined;
-  }
-  return { repoRoot: chosen.repoRoot };
+  return chosen ? { repoRoot: chosen.repoRoot } : undefined;
 }
 
 // =====================

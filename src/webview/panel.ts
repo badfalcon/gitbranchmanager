@@ -11,18 +11,17 @@ import {
   fetchWithPrune,
   getCfg,
   getCurrentBranch,
-  getUpstreamMap,
   isProtectedBranch,
   listLocalBranchesWithStatus,
   listRemoteBranchesWithStatus,
   mergeIntoCurrent,
-  pickRepository,
   renameBranch,
   resolveBaseBranch,
   simpleBranchNameValidator,
   type RepoContext,
   type WebviewMessage,
 } from '../app';
+import type { QueueTreeProvider } from '../queue/queueTreeProvider';
 
 type State = {
   locals: Awaited<ReturnType<typeof listLocalBranchesWithStatus>>;
@@ -71,12 +70,23 @@ async function getState(repoRoot: string): Promise<State> {
 }
 
 let activePanel: vscode.WebviewPanel | undefined;
+let activeRepoRoot: string | undefined;
 
-export async function openManagerPanel(context: vscode.ExtensionContext, repo: RepoContext) {
-  // Reuse existing panel instead of opening duplicates
+export async function openManagerPanel(
+  context: vscode.ExtensionContext,
+  repo: RepoContext,
+  queueProvider: QueueTreeProvider
+) {
+  // Reuse existing panel when the repo hasn't changed; recreate on switch
   if (activePanel) {
-    activePanel.reveal(vscode.ViewColumn.Active);
-    return;
+    if (activeRepoRoot === repo.repoRoot) {
+      activePanel.reveal(vscode.ViewColumn.Active);
+      return;
+    }
+    const stale = activePanel;
+    activePanel = undefined;
+    activeRepoRoot = undefined;
+    stale.dispose();
   }
 
   const panel = vscode.window.createWebviewPanel(
@@ -89,12 +99,17 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
     }
   );
   activePanel = panel;
-  panel.onDidDispose(() => { activePanel = undefined; }, undefined, context.subscriptions);
+  activeRepoRoot = repo.repoRoot;
+  panel.onDidDispose(() => {
+    activePanel = undefined;
+    activeRepoRoot = undefined;
+  }, undefined, context.subscriptions);
 
   const nonce = randomBytes(16).toString('base64url');
   panel.webview.html = await getHtmlFromFile(context, nonce);
 
   const refresh = async () => {
+    panel.webview.postMessage({ type: 'loading' });
     try {
       const state = await getState(repo.repoRoot);
       panel.webview.postMessage({ type: 'state', state });
@@ -102,6 +117,8 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
       panel.webview.postMessage({ type: 'error', message: err?.message ?? String(err) });
     }
   };
+
+  queueProvider.setPostExecuteHook(refresh);
 
   panel.webview.onDidReceiveMessage(
     async (raw: unknown) => {
@@ -235,257 +252,9 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
             break;
           }
 
-          case 'executeCleanup': {
-            const cfg = getCfg();
-            const branches = msg.branches;
-
-            if (branches.length === 0) {
-              break;
-            }
-
-            const proceed =
-              !cfg.confirmBeforeDelete ||
-              (await confirm(vscode.l10n.t('Delete {0} selected local branches?', branches.length)));
-            if (!proceed) {
-              break;
-            }
-
-            const failedLocal: string[] = [];
-            const failedRemote: string[] = [];
-            const deletedBranches: string[] = [];
-
-            // Fetch upstream map BEFORE deleting branches, since git removes
-            // tracking config ([branch "x"]) from .git/config upon deletion
-            const upstreams = msg.includeRemote ? await getUpstreamMap(repo.repoRoot) : new Map<string, string>();
-
-            for (const name of branches) {
-              try {
-                await deleteLocalBranch(repo.repoRoot, name, cfg.forceDeleteLocal);
-                deletedBranches.push(name);
-              } catch {
-                failedLocal.push(name);
-              }
-            }
-
-            // If some branches failed (likely unmerged), offer to force delete
-            if (failedLocal.length > 0 && !cfg.forceDeleteLocal) {
-              const forceDelete = await confirm(
-                vscode.l10n.t(
-                  '{0} branches are not fully merged. Force delete them?',
-                  failedLocal.length
-                )
-              );
-              if (forceDelete) {
-                const stillFailed: string[] = [];
-                for (const name of failedLocal) {
-                  try {
-                    await deleteLocalBranch(repo.repoRoot, name, true);
-                    deletedBranches.push(name);
-                  } catch {
-                    stillFailed.push(name);
-                  }
-                }
-                failedLocal.length = 0;
-                failedLocal.push(...stillFailed);
-              }
-            }
-
-            if (msg.includeRemote) {
-
-              // Separate tracked and untracked branches
-              const trackedRemotes: { remote: string; name: string; full: string }[] = [];
-              const untrackedRemotes: { remote: string; name: string; full: string }[] = [];
-
-              for (const name of deletedBranches) {
-                const up = upstreams.get(name);
-                if (up && up.includes('/')) {
-                  const [remote, ...rest] = up.split('/');
-                  const rName = rest.join('/');
-                  if (!isProtectedBranch(rName, cfg.protected)) {
-                    trackedRemotes.push({ remote, name: rName, full: up });
-                  }
-                } else {
-                  // No tracking - check if origin/<name> exists
-                  if (!isProtectedBranch(name, cfg.protected)) {
-                    untrackedRemotes.push({ remote: 'origin', name, full: `origin/${name}` });
-                  }
-                }
-              }
-
-              // Delete tracked remotes directly
-              for (const { remote, name, full } of trackedRemotes) {
-                try {
-                  await deleteRemoteBranch(repo.repoRoot, remote, name);
-                } catch {
-                  failedRemote.push(full);
-                }
-              }
-
-              // Ask confirmation for untracked remotes with same name
-              if (untrackedRemotes.length > 0) {
-                const deleteUntracked = await confirm(
-                  vscode.l10n.t(
-                    'Also delete {0} remote branches with same name (not tracked)?',
-                    untrackedRemotes.length
-                  )
-                );
-                if (deleteUntracked) {
-                  for (const { remote, name } of untrackedRemotes) {
-                    try {
-                      await deleteRemoteBranch(repo.repoRoot, remote, name);
-                    } catch {
-                      // Ignore - might not exist on remote
-                    }
-                  }
-                }
-              }
-            }
-
-            // Report any failures to the user
-            if (failedLocal.length > 0 || failedRemote.length > 0) {
-              const parts: string[] = [];
-              if (failedLocal.length > 0) {
-                parts.push(vscode.l10n.t('Local: {0}', failedLocal.join(', ')));
-              }
-              if (failedRemote.length > 0) {
-                parts.push(vscode.l10n.t('Remote: {0}', failedRemote.join(', ')));
-              }
-              vscode.window.showWarningMessage(
-                vscode.l10n.t('Failed to delete some branches: {0}', parts.join('; '))
-              );
-            }
-
-            await refresh();
-            break;
-          }
-
-          case 'executeRemoteCleanup': {
-            const cfg = getCfg();
-            const branches = msg.branches; // Format: "origin/branch-name"
-
-            if (branches.length === 0) {
-              break;
-            }
-
-            const proceed =
-              !cfg.confirmBeforeDelete ||
-              (await confirm(vscode.l10n.t('Delete {0} selected remote branches?', branches.length)));
-            if (!proceed) {
-              break;
-            }
-
-            const failed: string[] = [];
-            for (const fullName of branches) {
-              // Parse "origin/branch-name" into remote and name
-              const parts = fullName.split('/');
-              const remote = parts.shift()!;
-              const name = parts.join('/');
-
-              if (isProtectedBranch(name, cfg.protected)) {
-                failed.push(fullName);
-                continue;
-              }
-
-              try {
-                await deleteRemoteBranch(repo.repoRoot, remote, name);
-              } catch {
-                failed.push(fullName);
-              }
-            }
-
-            if (failed.length > 0) {
-              vscode.window.showWarningMessage(
-                vscode.l10n.t('Failed to delete some branches: {0}', failed.join(', '))
-              );
-            }
-
-            await refresh();
-            break;
-          }
-
-          case 'deleteSelectedBranches': {
-            const cfg = getCfg();
-            const { localBranches, remoteBranches } = msg;
-            const total = localBranches.length + remoteBranches.length;
-
-            if (total === 0) {
-              break;
-            }
-
-            const proceed =
-              !cfg.confirmBeforeDelete ||
-              (await confirm(vscode.l10n.t('Delete {0} selected branches?', total)));
-            if (!proceed) {
-              break;
-            }
-
-            const failedLocal: string[] = [];
-            const failedRemote: string[] = [];
-
-            // Delete local branches
-            for (const name of localBranches) {
-              try {
-                await deleteLocalBranch(repo.repoRoot, name, cfg.forceDeleteLocal);
-              } catch {
-                failedLocal.push(name);
-              }
-            }
-
-            // Offer force delete for unmerged local branches
-            if (failedLocal.length > 0 && !cfg.forceDeleteLocal) {
-              const forceDelete = await confirm(
-                vscode.l10n.t(
-                  '{0} branches are not fully merged. Force delete them?',
-                  failedLocal.length
-                )
-              );
-              if (forceDelete) {
-                const stillFailed: string[] = [];
-                for (const name of failedLocal) {
-                  try {
-                    await deleteLocalBranch(repo.repoRoot, name, true);
-                  } catch {
-                    stillFailed.push(name);
-                  }
-                }
-                failedLocal.length = 0;
-                failedLocal.push(...stillFailed);
-              }
-            }
-
-            // Delete remote branches
-            for (const fullName of remoteBranches) {
-              const parts = fullName.split('/');
-              const remote = parts.shift()!;
-              const name = parts.join('/');
-
-              if (isProtectedBranch(name, cfg.protected)) {
-                failedRemote.push(fullName);
-                continue;
-              }
-
-              try {
-                await deleteRemoteBranch(repo.repoRoot, remote, name);
-              } catch {
-                failedRemote.push(fullName);
-              }
-            }
-
-            // Report failures
-            if (failedLocal.length > 0 || failedRemote.length > 0) {
-              const parts: string[] = [];
-              if (failedLocal.length > 0) {
-                parts.push(vscode.l10n.t('Local: {0}', failedLocal.join(', ')));
-              }
-              if (failedRemote.length > 0) {
-                parts.push(vscode.l10n.t('Remote: {0}', failedRemote.join(', ')));
-              }
-              vscode.window.showWarningMessage(
-                vscode.l10n.t('Failed to delete some branches: {0}', parts.join('; '))
-              );
-            }
-
-            await refresh();
+          case 'addToQueue': {
+            const added = queueProvider.add(msg.items);
+            panel.webview.postMessage({ type: 'queueAdded', count: added });
             break;
           }
         }
@@ -498,22 +267,6 @@ export async function openManagerPanel(context: vscode.ExtensionContext, repo: R
   );
 
   await refresh();
-}
-
-/**
- * Convenience command that opens manager for the selected repo.
- * (Used only if you want to keep extension.ts thinner.)
- */
-export async function openManagerCommand(context: vscode.ExtensionContext) {
-  const repo = await pickRepository();
-  if (!repo) {
-    vscode.window.showWarningMessage(
-      vscode.l10n.t('No Git repository found. Open a folder or initialize Git.')
-    );
-    return;
-  }
-
-  await openManagerPanel(context, repo);
 }
 
 function openLogInTerminal(cwd: string, ref: string) {
@@ -565,7 +318,6 @@ type WebviewI18n = {
 
   // Preview panel
   previewTitle: string;
-  previewIncludeRemote: string;
   previewCancel: string;
   previewExecute: string;
   previewSelectAll: string;
@@ -577,7 +329,6 @@ type WebviewI18n = {
 
   // Select mode
   selectMode: string;
-  deleteSelected: string;
   selectedCount: string;
 
   // Search
@@ -587,6 +338,14 @@ type WebviewI18n = {
 
   // Settings
   openSettings: string;
+
+  // Loading
+  loading: string;
+
+  // Queue staging (extension side owns the queue/progress UI)
+  queueAddedCount: string;
+  previewAddToQueue: string;
+  queueIncludeRemote: string;
 };
 
 function getWebviewI18n(): WebviewI18n {
@@ -633,7 +392,6 @@ function getWebviewI18n(): WebviewI18n {
 
     // Preview panel
     previewTitle: vscode.l10n.t('Cleanup Preview'),
-    previewIncludeRemote: vscode.l10n.t('Also delete corresponding remote branches'),
     previewCancel: vscode.l10n.t('Cancel'),
     previewExecute: vscode.l10n.t('Delete Selected'),
     previewSelectAll: vscode.l10n.t('Select All'),
@@ -645,7 +403,6 @@ function getWebviewI18n(): WebviewI18n {
 
     // Select mode
     selectMode: vscode.l10n.t('Select'),
-    deleteSelected: vscode.l10n.t('Delete Selected'),
     selectedCount: vscode.l10n.t('{0} selected'),
 
     // Search
@@ -655,6 +412,14 @@ function getWebviewI18n(): WebviewI18n {
 
     // Settings
     openSettings: vscode.l10n.t('Settings'),
+
+    // Loading
+    loading: vscode.l10n.t('Loading...'),
+
+    // Queue staging
+    queueAddedCount: vscode.l10n.t('{0} branches added to queue'),
+    previewAddToQueue: vscode.l10n.t('Add to Queue'),
+    queueIncludeRemote: vscode.l10n.t('Also delete corresponding remote branches'),
   };
 }
 

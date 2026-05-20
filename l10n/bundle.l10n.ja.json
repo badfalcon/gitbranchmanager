@@ -3,6 +3,11 @@
   "extension.description": "Git ブランチの整理に特化した VS Code 拡張です（デッド/古い/削除済みリモートのブランチ検出・削除、その他ブランチ管理機能）。",
 
   "command.openCleaner.title": "Git Souji: 開く",
+  "command.queue.execute.title": "削除キューを実行",
+  "command.queue.clear.title": "削除キューをクリア",
+  "command.queue.removeItem.title": "削除キューから除外",
+
+  "view.deletionQueue.name": "削除キュー",
 
   "config.title": "Git Souji",
 
@@ -113,5 +118,21 @@
   "Search branches...": "ブランチを検索...",
   "Match Case": "大文字/小文字を区別",
   "Use Regular Expression": "正規表現を使用",
-  "Settings": "設定"
+  "Settings": "設定",
+
+  "Deleting...": "削除中...",
+  "Deletion Complete": "削除完了",
+  "{0} / {1} completed": "{0} / {1} 完了",
+  "{0} failed": "{0} 件失敗",
+  "local": "ローカル",
+  "remote": "リモート",
+
+  "Deletion Queue": "削除キュー",
+  "{0} branches added to queue": "{0} 件のブランチをキューに追加しました",
+  "Add to Queue": "キューに追加",
+  "Delete {0} branches? This cannot be undone.": "{0} 件のブランチを削除しますか？この操作は取り消せません。",
+  "Open Git Souji first to set the repository.": "先に Git Souji を開いてリポジトリを設定してください。",
+  "Deleting branches...": "ブランチを削除中...",
+  "Invalid remote ref: {0}": "無効なリモート参照: {0}",
+  "Loading...": "読み込み中..."
 }

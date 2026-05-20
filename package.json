@@ -2,7 +2,7 @@
   "name": "gitsouji",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "publisher": "badfalcon",
   "license": "MIT",
   "icon": "images/icon.png",
@@ -41,7 +41,54 @@
       {
         "command": "gitsouji.openCleaner",
         "title": "%command.openCleaner.title%",
-        "icon": "$(git-branch)"
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "gitsouji.queue.execute",
+        "title": "%command.queue.execute.title%",
+        "category": "Git Souji",
+        "icon": "$(play)"
+      },
+      {
+        "command": "gitsouji.queue.clear",
+        "title": "%command.queue.clear.title%",
+        "category": "Git Souji",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "gitsouji.queue.removeItem",
+        "title": "%command.queue.removeItem.title%",
+        "category": "Git Souji",
+        "icon": "$(close)"
+      },
+      {
+        "command": "gitsouji.switchRepository",
+        "title": "%command.switchRepository.title%",
+        "category": "Git Souji",
+        "icon": "$(repo)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "gitsouji",
+          "title": "%viewsContainers.gitsouji.title%",
+          "icon": "media/activity-bar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "gitsouji": [
+        {
+          "id": "gitsouji.deletionQueue",
+          "name": "%view.deletionQueue.name%"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "gitsouji.deletionQueue",
+        "contents": "%viewsWelcome.deletionQueue.empty%"
       }
     ],
     "configuration": {
@@ -117,6 +164,44 @@
           "command": "gitsouji.openCleaner",
           "group": "navigation@10",
           "when": "scmProvider == git"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "gitsouji.queue.execute",
+          "when": "view == gitsouji.deletionQueue",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitsouji.queue.clear",
+          "when": "view == gitsouji.deletionQueue",
+          "group": "navigation@2"
+        },
+        {
+          "command": "gitsouji.switchRepository",
+          "when": "view == gitsouji.deletionQueue",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "gitsouji.queue.removeItem",
+          "when": "view == gitsouji.deletionQueue && viewItem == queueItemPending",
+          "group": "inline"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "gitsouji.queue.execute",
+          "when": "gitsouji.queueHasItems"
+        },
+        {
+          "command": "gitsouji.queue.clear",
+          "when": "gitsouji.queueHasItems"
+        },
+        {
+          "command": "gitsouji.queue.removeItem",
+          "when": "false"
         }
       ]
     }

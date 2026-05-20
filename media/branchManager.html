@@ -63,6 +63,17 @@ code { font-family: var(--vscode-editor-font-family); }
 .regex-toggle:hover { background: var(--vscode-button-secondaryHoverBackground); }
 .regex-toggle input { display: none; }
 .regex-toggle.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-focusBorder); }
+
+/* Queue toast */
+.queue-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); padding: 6px 16px; border-radius: 4px; font-size: 12px; z-index: 200; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+.queue-toast.visible { opacity: 1; }
+
+/* Loading overlay */
+.loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--vscode-editor-background); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; z-index: 300; opacity: 1; transition: opacity 0.2s; }
+.loading-overlay.hidden { opacity: 0; pointer-events: none; }
+.loading-spinner { width: 32px; height: 32px; border: 3px solid var(--vscode-editorGroup-border); border-top-color: var(--vscode-focusBorder); border-radius: 50%; animation: spin 0.8s linear infinite; }
+.loading-text { color: var(--vscode-descriptionForeground); font-size: 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -74,7 +85,7 @@ code { font-family: var(--vscode-editor-font-family); }
     <span id="error" style="color: var(--vscode-errorForeground);"></span>
     <div class="select-actions hidden" id="selectActions">
       <span class="select-count" id="selectCount"></span>
-      <button class="btn danger" id="deleteSelected"></button>
+      <button class="btn primary" id="deleteSelected"></button>
     </div>
     <div class="toolbar-spacer"></div>
     <button class="btn btn-icon" id="openSettings" title=""><svg viewBox="0 0 16 16"><path d="M9.1 4.4L8.6 2H7.4l-.5 2.4-.7.3-2-1.3-.9.8 1.3 2-.2.7-2.4.5v1.2l2.4.5.3.8-1.3 2 .8.8 2-1.3.8.3.4 2.3h1.2l.5-2.4.8-.3 2 1.3.8-.8-1.3-2 .3-.8 2.3-.4V7.4l-2.4-.5-.3-.8 1.3-2-.8-.8-2 1.3-.7-.2zM9.4 1l.5 2.4L12 2.1l2 2-1.4 2.1 2.4.4v2.8l-2.4.5L14 12l-2 2-2.1-1.4-.5 2.4H6.6l-.5-2.4L4 13.9l-2-2 1.4-2.1L1 9.4V6.6l2.4-.5L2.1 4l2-2 2.1 1.4.4-2.4h2.8zm.6 7a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm1 0a3 3 0 1 0-6 0 3 3 0 0 0 6 0z"/></svg></button>
@@ -114,6 +125,13 @@ code { font-family: var(--vscode-editor-font-family); }
       <button class="btn primary" id="remoteCleanupAll"></button>
     </div>
     <table class="table" id="remote"></table>
+  </div>
+
+  <div class="queue-toast" id="queueToast"></div>
+
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text" id="loadingText"></div>
   </div>
 
   <!-- Preview Modal -->
@@ -165,10 +183,11 @@ code { font-family: var(--vscode-editor-font-family); }
     let caseSensitive = false;
 
     // Static labels
+    $('loadingText').textContent = I18N.loading;
     $('refresh').textContent = I18N.refresh;
     $('create').textContent = I18N.create;
     $('selectMode').textContent = I18N.selectMode;
-    $('deleteSelected').textContent = I18N.deleteSelected;
+    $('deleteSelected').textContent = I18N.previewAddToQueue;
     $('localTitle').textContent = I18N.localBranches;
     $('remoteTitle').textContent = I18N.remoteBranches;
 
@@ -187,15 +206,15 @@ code { font-family: var(--vscode-editor-font-family); }
 
     // Preview panel labels
     $('previewTitle').textContent = I18N.previewTitle;
-    $('includeRemoteLabel').textContent = I18N.previewIncludeRemote;
+    $('includeRemoteLabel').textContent = I18N.queueIncludeRemote;
     $('previewCancel').textContent = I18N.previewCancel;
-    $('previewExecute').textContent = I18N.previewExecute;
+    $('previewExecute').textContent = I18N.previewAddToQueue;
 
     // Search placeholders and tooltips
-    $('searchInput').placeholder = I18N.searchPlaceholder || 'Search branches...';
-    $('caseToggle').title = I18N.searchCaseSensitive || 'Match Case';
-    $('regexToggle').title = I18N.searchUseRegex || 'Use Regular Expression';
-    $('openSettings').title = I18N.openSettings || 'Settings';
+    $('searchInput').placeholder = I18N.searchPlaceholder;
+    $('caseToggle').title = I18N.searchCaseSensitive;
+    $('regexToggle').title = I18N.searchUseRegex;
+    $('openSettings').title = I18N.openSettings;
 
     // Event listeners
     $('refresh').addEventListener('click', () => vscode.postMessage({ type: 'refresh' }));
@@ -219,7 +238,7 @@ code { font-family: var(--vscode-editor-font-family); }
     $('previewClose').addEventListener('click', closePreview);
     $('previewOverlay').addEventListener('click', closePreview);
     $('previewCancel').addEventListener('click', closePreview);
-    $('previewExecute').addEventListener('click', executeCleanup);
+    $('previewExecute').addEventListener('click', addPreviewToQueue);
 
     // Search event listeners (unified)
     $('searchInput').addEventListener('input', (e) => {
@@ -256,14 +275,27 @@ code { font-family: var(--vscode-editor-font-family); }
       if (currentState) render(currentState);
     }
 
+    const loadingOverlay = $('loadingOverlay');
+    function setLoading(visible) {
+      loadingOverlay.classList.toggle('hidden', !visible);
+    }
+
     window.addEventListener('message', (e) => {
       const msg = e.data;
-      if (msg.type === 'state') {
+      if (msg.type === 'loading') {
+        setLoading(true);
+      } else if (msg.type === 'state') {
         errEl.textContent = '';
         currentState = msg.state;
         render(msg.state);
+        setLoading(false);
       } else if (msg.type === 'error') {
         errEl.textContent = msg.message || I18N.errorFallback;
+        setLoading(false);
+      } else if (msg.type === 'queueAdded') {
+        if (msg.count > 0) {
+          showToast(I18N.queueAddedCount.replace('{0}', msg.count));
+        }
       }
     });
 
@@ -402,7 +434,7 @@ code { font-family: var(--vscode-editor-font-family); }
         let checkboxHtml = '';
         if (selectModeActive) {
           checkboxHtml = canSelect
-            ? '<td class="select-col"><input type="checkbox" data-local="' + escapeHtml(r.short) + '" onchange="updateSelectCount()" /></td>'
+            ? '<td class="select-col"><input type="checkbox" data-local="' + escapeHtml(r.short) + '" /></td>'
             : '<td class="select-col"></td>';
         }
 
@@ -426,6 +458,13 @@ code { font-family: var(--vscode-editor-font-family); }
           }
         }
         localEl.appendChild(tr);
+      }
+
+      // Attach change listeners for select-mode checkboxes (CSP blocks inline onchange)
+      if (selectModeActive) {
+        localEl.querySelectorAll('input[data-local]').forEach(cb => {
+          cb.addEventListener('change', updateSelectCount);
+        });
       }
     }
 
@@ -476,7 +515,7 @@ code { font-family: var(--vscode-editor-font-family); }
         let checkboxHtml = '';
         if (selectModeActive && allowRemoteDeletion) {
           checkboxHtml = canSelect
-            ? '<td class="select-col"><input type="checkbox" data-remote="' + escapeHtml(r.short) + '" onchange="updateSelectCount()" /></td>'
+            ? '<td class="select-col"><input type="checkbox" data-remote="' + escapeHtml(r.short) + '" /></td>'
             : '<td class="select-col"></td>';
         }
 
@@ -493,6 +532,13 @@ code { font-family: var(--vscode-editor-font-family); }
           actions.appendChild(btn(I18N.actionDeleteRemote, () => vscode.postMessage({ type: 'deleteRemote', remote, name })));
         }
         remoteEl.appendChild(tr);
+      }
+
+      // Attach change listeners for select-mode checkboxes (CSP blocks inline onchange)
+      if (selectModeActive && allowRemoteDeletion) {
+        remoteEl.querySelectorAll('input[data-remote]').forEach(cb => {
+          cb.addEventListener('change', updateSelectCount);
+        });
       }
     }
 
@@ -585,12 +631,32 @@ code { font-family: var(--vscode-editor-font-family); }
       }
     }
 
+    // ==================
+    // Deletion Queue staging (extension-side TreeView owns state and execution)
+    // ==================
+
+    function sendToQueue(items) {
+      if (items.length === 0) return;
+      vscode.postMessage({ type: 'addToQueue', items });
+    }
+
+    function showToast(message) {
+      const toast = $('queueToast');
+      toast.textContent = message;
+      toast.classList.add('visible');
+      setTimeout(() => toast.classList.remove('visible'), 2000);
+    }
+
+    // ==================
+    // Preview modal actions
+    // ==================
+
     function closePreview() {
       $('previewOverlay').style.display = 'none';
       $('previewPanel').style.display = 'none';
     }
 
-    function executeCleanup() {
+    function addPreviewToQueue() {
       const table = $('previewTable');
       const checkboxes = table.querySelectorAll('input[type="checkbox"][data-branch]:checked');
       const branches = Array.from(checkboxes).map(cb => cb.dataset.branch);
@@ -600,12 +666,11 @@ code { font-family: var(--vscode-editor-font-family); }
         return;
       }
 
-      if (cleanupMode === 'remote') {
-        vscode.postMessage({ type: 'executeRemoteCleanup', branches });
-      } else {
-        const includeRemote = $('includeRemote').checked;
-        vscode.postMessage({ type: 'executeCleanup', branches, includeRemote });
-      }
+      const kind = cleanupMode === 'remote' ? 'remote' : 'local';
+      const withRemote = kind === 'local' && $('includeRemote').checked;
+      const items = branches.map(name => ({ name, kind, includeRemote: withRemote }));
+
+      sendToQueue(items);
       closePreview();
     }
 
@@ -642,7 +707,17 @@ code { font-family: var(--vscode-editor-font-family); }
         return;
       }
 
-      vscode.postMessage({ type: 'deleteSelectedBranches', localBranches, remoteBranches });
+      const items = [
+        ...localBranches.map(name => ({ name, kind: 'local' })),
+        ...remoteBranches.map(name => ({ name, kind: 'remote' })),
+      ];
+      sendToQueue(items);
+
+      // Exit select mode
+      selectModeActive = false;
+      $('selectMode').classList.remove('toggle-active');
+      $('selectActions').classList.add('hidden');
+      if (currentState) render(currentState);
     }
 
     function escapeHtml(s) {
