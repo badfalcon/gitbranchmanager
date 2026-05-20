@@ -4,6 +4,13 @@ All notable changes to the "gitsouji" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [1.4.1] - 2026-05-21
+
+### Changed
+
+- README and STORE updated to document the deletion queue TreeView, repository switching, and the welcome view — content that should have shipped with 1.4.0
+- README intro now points at the correct launch entry points and aligns cleanup wording with the current UI
+
 ## [1.4.0] - 2026-05-20
 
 ### Added
