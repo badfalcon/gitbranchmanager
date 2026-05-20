@@ -3,6 +3,11 @@
   "extension.description": "A VS Code extension for cleaning up Git branches (detect and delete dead/stale/gone branches, with full branch management).",
 
   "command.openCleaner.title": "Git Souji: Open",
+  "command.queue.execute.title": "Execute Deletion Queue",
+  "command.queue.clear.title": "Clear Deletion Queue",
+  "command.queue.removeItem.title": "Remove from Deletion Queue",
+
+  "view.deletionQueue.name": "Deletion Queue",
 
   "config.title": "Git Souji",
 
@@ -123,10 +128,11 @@
   "remote": "remote",
 
   "Deletion Queue": "Deletion Queue",
-  "Execute": "Execute",
-  "Clear": "Clear",
-  "Queue is empty. Use Cleanup or Select mode to add branches.": "Queue is empty. Use Cleanup or Select mode to add branches.",
   "{0} branches added to queue": "{0} branches added to queue",
   "Add to Queue": "Add to Queue",
-  "Delete {0} branches? This cannot be undone.": "Delete {0} branches? This cannot be undone."
+  "Delete {0} branches? This cannot be undone.": "Delete {0} branches? This cannot be undone.",
+  "Open Git Souji first to set the repository.": "Open Git Souji first to set the repository.",
+  "Deleting branches...": "Deleting branches...",
+  "Invalid remote ref: {0}": "Invalid remote ref: {0}",
+  "Loading...": "Loading..."
 }

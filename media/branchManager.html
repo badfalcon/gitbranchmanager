@@ -64,43 +64,16 @@ code { font-family: var(--vscode-editor-font-family); }
 .regex-toggle input { display: none; }
 .regex-toggle.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-focusBorder); }
 
-/* Deletion queue panel (sticky bottom) */
-.queue-panel { position: sticky; bottom: 0; background: var(--vscode-sideBar-background); border-top: 2px solid var(--vscode-focusBorder); margin-top: 24px; z-index: 50; display: flex; flex-direction: column; max-height: 50vh; }
-.queue-resize-handle { height: 5px; cursor: ns-resize; background: transparent; display: flex; align-items: center; justify-content: center; }
-.queue-resize-handle:hover, .queue-resize-handle.active { background: var(--vscode-focusBorder); opacity: 0.4; }
-.queue-resize-handle::after { content: ''; width: 32px; height: 2px; border-radius: 1px; background: var(--vscode-descriptionForeground); opacity: 0.5; }
-.queue-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; user-select: none; }
-.queue-header:hover { background: var(--vscode-list-hoverBackground); }
-.queue-title { font-weight: bold; font-size: 12px; flex: 1; }
-.queue-count { font-size: 11px; padding: 1px 8px; border-radius: 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
-.queue-actions { display: flex; gap: 6px; }
-.queue-confirm { display: flex; align-items: center; gap: 8px; flex: 1; }
-.queue-confirm-msg { flex: 1; font-size: 12px; font-weight: bold; }
-.queue-confirm-actions { display: flex; gap: 6px; }
-.queue-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 8px; }
-.queue-body.collapsed { display: none; }
-.queue-empty { text-align: center; padding: 12px; color: var(--vscode-descriptionForeground); font-size: 11px; }
-.queue-item { display: flex; align-items: center; gap: 4px; padding: 3px 0; font-size: 12px; }
-.queue-item-name { flex: 1; }
-.queue-item-remove { cursor: pointer; border: none; background: none; color: var(--vscode-foreground); font-size: 14px; padding: 0 4px; opacity: 0; width: 20px; flex-shrink: 0; order: -1; }
-.queue-item:hover .queue-item-remove { opacity: 0.6; }
-.queue-item .queue-item-remove:hover { opacity: 1; color: var(--vscode-errorForeground); }
-.queue-item-done { opacity: 0.5; }
-.queue-item-done code { text-decoration: line-through; }
-.queue-toast { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); padding: 6px 16px; border-radius: 4px; font-size: 12px; z-index: 200; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+/* Queue toast */
+.queue-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); padding: 6px 16px; border-radius: 4px; font-size: 12px; z-index: 200; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
 .queue-toast.visible { opacity: 1; }
 
-/* Deletion progress (inside queue) */
-.deletion-progress-summary { margin-bottom: 8px; font-size: 12px; display: flex; gap: 16px; align-items: center; padding: 0 0 4px; }
-.deletion-progress-failed { color: var(--vscode-errorForeground, #f44336); }
-.deletion-status-icon { display: inline-block; width: 16px; text-align: center; }
-.deletion-success { color: var(--vscode-testing-iconPassed, #4caf50); }
-.deletion-failed { color: var(--vscode-errorForeground, #f44336); }
-.deletion-pending { opacity: 0.4; }
-.deletion-error-msg { font-size: 10px; color: var(--vscode-errorForeground); margin-left: 4px; }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-.deletion-deleting { animation: pulse 1s infinite; font-weight: bold; }
-.deletion-kind-badge { font-size: 10px; padding: 1px 6px; border-radius: 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
+/* Loading overlay */
+.loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--vscode-editor-background); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; z-index: 300; opacity: 1; transition: opacity 0.2s; }
+.loading-overlay.hidden { opacity: 0; pointer-events: none; }
+.loading-spinner { width: 32px; height: 32px; border: 3px solid var(--vscode-editorGroup-border); border-top-color: var(--vscode-focusBorder); border-radius: 50%; animation: spin 0.8s linear infinite; }
+.loading-text { color: var(--vscode-descriptionForeground); font-size: 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -154,30 +127,12 @@ code { font-family: var(--vscode-editor-font-family); }
     <table class="table" id="remote"></table>
   </div>
 
-  <!-- Deletion Queue (sticky bottom) -->
-  <div class="queue-panel" id="queuePanel" style="display:none;">
-    <div class="queue-resize-handle" id="queueResizeHandle"></div>
-    <div class="queue-header" id="queueHeader">
-      <span class="queue-title" id="queueTitle"></span>
-      <span class="queue-count" id="queueCount">0</span>
-      <div class="queue-actions" id="queueActions">
-        <button class="btn" id="queueClear"></button>
-        <button class="btn primary" id="queueExecute"></button>
-      </div>
-      <div class="queue-confirm" id="queueConfirm" style="display:none;">
-        <span class="queue-confirm-msg" id="queueConfirmMsg"></span>
-        <div class="queue-confirm-actions">
-          <button class="btn danger" id="queueConfirmYes"></button>
-          <button class="btn" id="queueConfirmCancel"></button>
-        </div>
-      </div>
-    </div>
-    <div class="queue-body" id="queueBody">
-      <div class="queue-empty" id="queueEmpty"></div>
-      <div id="queueItems"></div>
-    </div>
-  </div>
   <div class="queue-toast" id="queueToast"></div>
+
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text" id="loadingText"></div>
+  </div>
 
   <!-- Preview Modal -->
   <div class="preview-overlay" id="previewOverlay"></div>
@@ -216,11 +171,6 @@ code { font-family: var(--vscode-editor-font-family); }
     let cleanupMode = 'local'; // 'local' or 'remote'
     let selectModeActive = false;
 
-    // Deletion queue state: { name: string, kind: 'local'|'remote' }[]
-    let deletionQueue = [];
-    let queueCollapsed = false;
-    let queueExecuting = false;
-
     // Sort state for each table
     let localSort = { column: 'name', direction: 'asc' };
     let remoteSort = { column: 'name', direction: 'asc' };
@@ -233,6 +183,7 @@ code { font-family: var(--vscode-editor-font-family); }
     let caseSensitive = false;
 
     // Static labels
+    $('loadingText').textContent = I18N.loading;
     $('refresh').textContent = I18N.refresh;
     $('create').textContent = I18N.create;
     $('selectMode').textContent = I18N.selectMode;
@@ -258,14 +209,6 @@ code { font-family: var(--vscode-editor-font-family); }
     $('includeRemoteLabel').textContent = I18N.queueIncludeRemote;
     $('previewCancel').textContent = I18N.previewCancel;
     $('previewExecute').textContent = I18N.previewAddToQueue;
-
-    // Queue panel labels
-    $('queueTitle').textContent = I18N.queueTitle;
-    $('queueExecute').textContent = I18N.queueExecute;
-    $('queueClear').textContent = I18N.queueClear;
-    $('queueEmpty').textContent = I18N.queueEmpty;
-    $('queueConfirmYes').textContent = I18N.queueConfirmYes;
-    $('queueConfirmCancel').textContent = I18N.queueConfirmCancel;
 
     // Search placeholders and tooltips
     $('searchInput').placeholder = I18N.searchPlaceholder;
@@ -296,44 +239,6 @@ code { font-family: var(--vscode-editor-font-family); }
     $('previewOverlay').addEventListener('click', closePreview);
     $('previewCancel').addEventListener('click', closePreview);
     $('previewExecute').addEventListener('click', addPreviewToQueue);
-
-    // Queue panel events
-    $('queueHeader').addEventListener('click', (e) => {
-      // Don't toggle collapse when clicking buttons inside the header
-      if (e.target.closest('.queue-actions') || e.target.closest('.queue-confirm')) return;
-      toggleQueueCollapse();
-    });
-    $('queueExecute').addEventListener('click', showQueueConfirm);
-    $('queueClear').addEventListener('click', clearQueue);
-    $('queueConfirmYes').addEventListener('click', executeQueue);
-    $('queueConfirmCancel').addEventListener('click', hideQueueConfirm);
-
-    // Queue resize handle — drags to set fixed height on the entire panel
-    {
-      const handle = $('queueResizeHandle');
-      const panel = $('queuePanel');
-      let startY = 0, startH = 0;
-      handle.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        startY = e.clientY;
-        startH = panel.getBoundingClientRect().height;
-        handle.classList.add('active');
-        const onMove = (e) => {
-          const delta = startY - e.clientY; // dragging up = bigger
-          const h = Math.max(60, Math.min(startH + delta, window.innerHeight * 0.8));
-          panel.style.height = h + 'px';
-          panel.style.maxHeight = 'none';
-          if (queueCollapsed) { queueCollapsed = false; $('queueBody').classList.remove('collapsed'); }
-        };
-        const onUp = () => {
-          handle.classList.remove('active');
-          document.removeEventListener('mousemove', onMove);
-          document.removeEventListener('mouseup', onUp);
-        };
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
-      });
-    }
 
     // Search event listeners (unified)
     $('searchInput').addEventListener('input', (e) => {
@@ -370,20 +275,27 @@ code { font-family: var(--vscode-editor-font-family); }
       if (currentState) render(currentState);
     }
 
+    const loadingOverlay = $('loadingOverlay');
+    function setLoading(visible) {
+      loadingOverlay.classList.toggle('hidden', !visible);
+    }
+
     window.addEventListener('message', (e) => {
       const msg = e.data;
-      if (msg.type === 'state') {
+      if (msg.type === 'loading') {
+        setLoading(true);
+      } else if (msg.type === 'state') {
         errEl.textContent = '';
         currentState = msg.state;
         render(msg.state);
+        setLoading(false);
       } else if (msg.type === 'error') {
         errEl.textContent = msg.message || I18N.errorFallback;
-        if (queueExecuting) {
-          queueExecuting = false;
-          renderQueue();
+        setLoading(false);
+      } else if (msg.type === 'queueAdded') {
+        if (msg.count > 0) {
+          showToast(I18N.queueAddedCount.replace('{0}', msg.count));
         }
-      } else if (msg.type === 'deletionProgress') {
-        renderDeletionProgress(msg.items);
       }
     });
 
@@ -720,186 +632,12 @@ code { font-family: var(--vscode-editor-font-family); }
     }
 
     // ==================
-    // Deletion Queue
+    // Deletion Queue staging (extension-side TreeView owns state and execution)
     // ==================
 
-    function addToQueue(items) {
-      let added = 0;
-      for (const item of items) {
-        const exists = deletionQueue.some(q => q.name === item.name && q.kind === item.kind);
-        if (!exists) {
-          deletionQueue.push({ name: item.name, kind: item.kind, includeRemote: !!item.includeRemote });
-          added++;
-        }
-      }
-      renderQueue();
-      return added;
-    }
-
-    function removeFromQueue(index) {
-      if (queueExecuting) return;
-      deletionQueue.splice(index, 1);
-      renderQueue();
-    }
-
-    function clearQueue() {
-      if (queueExecuting) return;
-      deletionQueue = [];
-      renderQueue();
-    }
-
-    function toggleQueueCollapse() {
-      queueCollapsed = !queueCollapsed;
-      $('queueBody').classList.toggle('collapsed', queueCollapsed);
-    }
-
-    function renderQueue() {
-      // During execution, renderDeletionProgress owns the entire panel
-      if (queueExecuting) return;
-
-      const panel = $('queuePanel');
-      const count = deletionQueue.length;
-      $('queueCount').textContent = count;
-      $('queueTitle').textContent = I18N.queueTitle;
-      // Reset user-resized panel height so it auto-sizes to content
-      $('queuePanel').style.height = '';
-      $('queuePanel').style.maxHeight = '';
-
-      if (count > 0) {
-        panel.style.display = '';
-      } else {
-        panel.style.display = 'none';
-        return;
-      }
-
-      const pendingCount = deletionQueue.filter(q => !q.done).length;
-      $('queueExecute').disabled = pendingCount === 0;
-      $('queueClear').disabled = false;
-
-      const itemsEl = $('queueItems');
-      $('queueEmpty').style.display = 'none';
-      itemsEl.innerHTML = '';
-
-      for (let i = 0; i < deletionQueue.length; i++) {
-        const item = deletionQueue[i];
-        const div = document.createElement('div');
-        div.className = 'queue-item' + (item.done ? ' queue-item-done' : '');
-
-        let kindLabel = item.kind === 'local' ? I18N.deletionKindLocal : I18N.deletionKindRemote;
-        if (item.includeRemote) {
-          kindLabel += ' + ' + I18N.deletionKindRemote;
-        }
-        const statusIcon = item.done ? '<span class="deletion-status-icon deletion-success">✓</span>' : '';
-        div.innerHTML = statusIcon + '<span class="queue-item-name"><code>' + escapeHtml(item.name) + '</code> '
-          + '<span class="deletion-kind-badge">' + escapeHtml(kindLabel) + '</span></span>';
-
-        if (!item.done) {
-          const removeBtn = document.createElement('button');
-          removeBtn.className = 'queue-item-remove';
-          removeBtn.textContent = '✕';
-          removeBtn.dataset.index = i;
-          removeBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            removeFromQueue(parseInt(e.currentTarget.dataset.index));
-          });
-          div.appendChild(removeBtn);
-        }
-
-        itemsEl.appendChild(div);
-      }
-    }
-
-    function renderDeletionProgress(items) {
-      const completed = items.filter(i => i.status === 'deleted').length;
-      const failed = items.filter(i => i.status === 'failed').length;
-      const total = items.length;
-      const allDone = items.every(i => i.status === 'deleted' || i.status === 'failed');
-
-      queueExecuting = !allDone;
-
-      // Ensure queue panel is visible and expanded; reset user-resized height
-      $('queuePanel').style.display = '';
-      $('queuePanel').style.height = '';
-      $('queuePanel').style.maxHeight = '';
-      queueCollapsed = false;
-      $('queueBody').classList.remove('collapsed');
-
-      // Update header
-      $('queueTitle').textContent = allDone
-        ? I18N.deletionCompleteTitle
-        : I18N.deletionProgressTitle;
-      const prevDoneCount = deletionQueue.filter(q => q.done).length;
-      $('queueCount').textContent = prevDoneCount + total;
-      $('queueExecute').disabled = true;
-      $('queueClear').disabled = !allDone;
-
-      const itemsEl = $('queueItems');
-      $('queueEmpty').style.display = 'none';
-      itemsEl.innerHTML = '';
-
-      // Previously completed items from earlier executions (exclude current batch)
-      const currentNames = new Set(items.map(i => i.name + ':' + i.kind));
-      const prevDone = deletionQueue.filter(q => q.done && !currentNames.has(q.name + ':' + q.kind));
-      for (const item of prevDone) {
-        const div = document.createElement('div');
-        div.className = 'queue-item queue-item-done';
-        let kindLabel = item.kind === 'local' ? I18N.deletionKindLocal : I18N.deletionKindRemote;
-        if (item.includeRemote) {
-          kindLabel += ' + ' + I18N.deletionKindRemote;
-        }
-        div.innerHTML = '<span class="deletion-status-icon deletion-success">✓</span>'
-          + '<span class="queue-item-name"><code>' + escapeHtml(item.name) + '</code> '
-          + '<span class="deletion-kind-badge">' + escapeHtml(kindLabel) + '</span></span>';
-        itemsEl.appendChild(div);
-      }
-
-      // Summary for current execution
-      const summary = document.createElement('div');
-      summary.className = 'deletion-progress-summary';
-      let summaryHtml = '<span>' + escapeHtml(I18N.deletionProgressCount.replace('{0}', completed).replace('{1}', total)) + '</span>';
-      if (failed > 0) {
-        summaryHtml += '<span class="deletion-progress-failed">' + escapeHtml(I18N.deletionFailedCount.replace('{0}', failed)) + '</span>';
-      }
-      summary.innerHTML = summaryHtml;
-      itemsEl.appendChild(summary);
-
-      // Current execution items
-      for (const item of items) {
-        const div = document.createElement('div');
-        div.className = 'queue-item';
-        let statusIcon = '';
-
-        if (item.status === 'pending') {
-          statusIcon = '<span class="deletion-status-icon deletion-pending">○</span>';
-          div.classList.add('deletion-pending');
-        } else if (item.status === 'deleting') {
-          statusIcon = '<span class="deletion-status-icon deletion-deleting">◉</span>';
-          div.classList.add('deletion-deleting');
-        } else if (item.status === 'deleted') {
-          statusIcon = '<span class="deletion-status-icon deletion-success">✓</span>';
-        } else if (item.status === 'failed') {
-          statusIcon = '<span class="deletion-status-icon deletion-failed">✗</span>';
-        }
-
-        const kindLabel = item.kind === 'local' ? I18N.deletionKindLocal : I18N.deletionKindRemote;
-        let nameHtml = '<code>' + escapeHtml(item.name) + '</code> '
-          + '<span class="deletion-kind-badge">' + escapeHtml(kindLabel) + '</span>';
-        if (item.status === 'failed' && item.error) {
-          nameHtml += '<br/><span class="deletion-error-msg">' + escapeHtml(item.error) + '</span>';
-        }
-
-        div.innerHTML = statusIcon + '<span class="queue-item-name">' + nameHtml + '</span>';
-        itemsEl.appendChild(div);
-      }
-
-      // When done, mark only items from this batch as done (not items added mid-execution)
-      if (allDone) {
-        for (const q of deletionQueue) {
-          if (currentNames.has(q.name + ':' + q.kind)) {
-            q.done = true;
-          }
-        }
-      }
+    function sendToQueue(items) {
+      if (items.length === 0) return;
+      vscode.postMessage({ type: 'addToQueue', items });
     }
 
     function showToast(message) {
@@ -907,43 +645,6 @@ code { font-family: var(--vscode-editor-font-family); }
       toast.textContent = message;
       toast.classList.add('visible');
       setTimeout(() => toast.classList.remove('visible'), 2000);
-    }
-
-    function showQueueConfirm() {
-      const pendingCount = deletionQueue.filter(q => !q.done).length;
-      if (pendingCount === 0 || queueExecuting) return;
-      const msg = I18N.queueConfirmMsg
-        .replace('{0}', pendingCount);
-      $('queueConfirmMsg').textContent = msg;
-      $('queueConfirm').style.display = '';
-      // Hide action buttons so the confirm bar occupies the same header area
-      $('queueActions').style.display = 'none';
-      // Expand queue body so user can scroll through items
-      queueCollapsed = false;
-      $('queueBody').classList.remove('collapsed');
-    }
-
-    function hideQueueConfirm() {
-      $('queueConfirm').style.display = 'none';
-      $('queueActions').style.display = '';
-    }
-
-    function executeQueue() {
-      const pending = deletionQueue.filter(q => !q.done);
-      if (pending.length === 0 || queueExecuting) return;
-      hideQueueConfirm();
-      queueExecuting = true;
-      const wireItems = [];
-      for (const q of pending) {
-        wireItems.push({ name: q.name, kind: q.kind });
-        if (q.includeRemote) {
-          wireItems.push({ name: q.name, kind: 'includeRemote' });
-        }
-      }
-      vscode.postMessage({
-        type: 'executeDeletionQueue',
-        items: wireItems,
-      });
     }
 
     // ==================
@@ -969,12 +670,8 @@ code { font-family: var(--vscode-editor-font-family); }
       const withRemote = kind === 'local' && $('includeRemote').checked;
       const items = branches.map(name => ({ name, kind, includeRemote: withRemote }));
 
-      const added = addToQueue(items);
+      sendToQueue(items);
       closePreview();
-
-      if (added > 0) {
-        showToast(I18N.queueAddedCount.replace('{0}', added));
-      }
     }
 
     function btn(label, onClick) {
@@ -1014,10 +711,7 @@ code { font-family: var(--vscode-editor-font-family); }
         ...localBranches.map(name => ({ name, kind: 'local' })),
         ...remoteBranches.map(name => ({ name, kind: 'remote' })),
       ];
-      const added = addToQueue(items);
-      if (added > 0) {
-        showToast(I18N.queueAddedCount.replace('{0}', added));
-      }
+      sendToQueue(items);
 
       // Exit select mode
       selectModeActive = false;

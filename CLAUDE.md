@@ -70,12 +70,19 @@ Main TypeScript module containing:
 - Buffer limit: 1MB for large outputs
 
 ### **Webview Panel** ([src/webview/panel.ts](src/webview/panel.ts))
-- `openManagerPanel()` - creates webview, injects CSP/nonce, handles message dispatch
-- Message handler for user actions (checkout, create, rename, delete, merge, cleanup)
+- `openManagerPanel()` - creates webview, injects CSP/nonce, handles message dispatch; takes the `QueueTreeProvider` and wires up the post-execute refresh hook
+- Message handler for user actions (checkout, create, rename, delete, merge, add-to-queue)
 - `getState()` - fetches current branch list with cleanup status indicators for both local and remote
 - Auto-fetches with prune when `autoFetchPrune` is enabled
 - Embeds webview i18n strings as base64 JSON
 - Loads HTML from [media/branchManager.html](media/branchManager.html)
+
+### **Deletion Queue Tree View** ([src/queue/queueTreeProvider.ts](src/queue/queueTreeProvider.ts))
+- `QueueTreeProvider` - a native VS Code `TreeDataProvider` that owns queue state + execution
+- Lives in the SCM view container; visible only when `gitsouji.queueHasItems` context is true
+- `add(items)`, `removeItem(item)`, `clear()`, `execute()` - all operations are command-driven
+- Execution uses `vscode.window.withProgress` (Notification location) for global progress, plus per-item status icons in the tree view (pending / spinning / check / error)
+- Confirmation dialogs via `vscode.window.showInformationMessage` (batch delete, force-retry, untracked remote)
 
 ### **Webview UI** ([media/branchManager.html](media/branchManager.html))
 - Static HTML with inline CSS/JavaScript
@@ -87,7 +94,7 @@ Main TypeScript module containing:
 - **Remote cleanup toolbar**: Merged/Stale/Cleanup All buttons (hidden when `allowRemoteBranchDeletion` is false)
 - **Select mode**: Toggle to show checkboxes for manual multi-select deletion
 - **Preview modal**: Cleanup candidate preview with checkbox selection and "Add to Queue" button
-- **Deletion queue panel**: Sticky bottom panel showing staged deletions with Execute/Clear controls
+- **Toast**: Brief notification when items are added to the queue (queue itself lives in the SCM sidebar tree view)
 - i18n strings injected at runtime as base64-encoded JSON
 
 ## Key Design Patterns
@@ -141,18 +148,20 @@ Main TypeScript module containing:
 - For **untracked branches**: prompts "Also delete X remote branches with same name (not tracked)?"
 - If confirmed, attempts to delete `origin/<branch-name>`
 
-**Deletion Queue (UI-side staging + bulk execution)**:
-- Webview maintains a client-side deletion queue (sticky bottom panel)
+**Deletion Queue (extension-owned TreeView + bulk execution)**:
+- `QueueTreeProvider` (extension side) owns the queue state
+- Tree view lives in the SCM view container, hidden when empty via the `gitsouji.queueHasItems` context key
 - Users add branches to the queue via:
-  - **Cleanup preview modal**: "Add to Queue" button adds checked branches
+  - **Cleanup preview modal**: "Add to Queue" button adds checked branches (webview → extension via `addToQueue`)
   - **Select mode**: "Delete Selected" adds selected branches to queue
-- Queue panel shows all pending items with `✕` buttons for individual removal
-- "Execute" button sends all queued items to extension via `executeDeletionQueue` message
-- Extension processes queue with real-time `deletionProgress` updates rendered in queue panel
-- Each `DeletionQueueItem` tracks: `name`, `kind` (local/remote), `status` (pending/deleting/deleted/failed), optional `error`
-- `includeRemote` kind in wire protocol: local branches whose remote counterpart should also be deleted (resolved via upstream map); converted to separate local + remote `DeletionQueueItem`s during execution
-- Force-delete retry transitions failed items back to pending before retrying
-- Single delete operations (per-row Delete button) bypass the queue and execute immediately
+- Tree items show status icons (pending git-branch/cloud icon, spinning, ✓, ✗) and kind description
+- **View title actions**: Execute (play icon), Clear (clear-all icon)
+- **Inline item action**: Remove (✕) — only shown for pending items via `viewItem == queueItemPending`
+- Execution path: `gitsouji.queue.execute` command → provider's `execute()` → `withProgress` notification spans entire batch; per-item status updates fire `onDidChangeTreeData` for inline feedback
+- Each `DeletionQueueItem` tracks: `name`, `kind` (local/remote), optional `includeRemote` flag, `status` (pending/deleting/deleted/failed), optional `error`
+- `includeRemote` flag: local branches whose remote counterpart should also be deleted (upstream resolved at execution time); remote entries are added into the queue as separate tree items during execution
+- Force-delete retry: if any local deletion fails (likely unmerged), user is prompted; failed items transition back to pending before retry
+- Single delete operations (per-row Delete button in the webview) bypass the queue and execute immediately
 
 ### Select Mode
 - Toggle "Select" button to enter select mode
@@ -196,12 +205,17 @@ Two-way message flow between extension and webview:
 - `{ type: 'deleteLocal'; name: string }` - delete local branch
 - `{ type: 'mergeIntoCurrent'; source: string }` - merge into current
 - `{ type: 'deleteRemote'; remote: string; name: string }` - delete remote branch
-- `{ type: 'executeDeletionQueue'; items: { name: string; kind: 'local' | 'remote' | 'includeRemote' }[] }` - execute deletion queue
+- `{ type: 'addToQueue'; items: { name: string; kind: 'local' | 'remote'; includeRemote?: boolean }[] }` - stage items into the extension-side deletion queue
 
 **Extension → Webview (State)**:
 - `{ type: 'state'; state: { locals: BranchRow[]; remotes: BranchRow[]; current?: string; repoRoot: string; showStatusBadges?: boolean; allowRemoteBranchDeletion?: boolean } }` - branch list with status
 - `{ type: 'error'; message: string }` - error notification
-- `{ type: 'deletionProgress'; items: DeletionQueueItem[] }` - real-time deletion queue progress
+- `{ type: 'queueAdded'; count: number }` - ack after `addToQueue`, webview shows a toast
+
+**Extension-side commands (TreeView):**
+- `gitsouji.queue.execute` - run the deletion queue
+- `gitsouji.queue.clear` - clear the queue
+- `gitsouji.queue.removeItem` - remove a single item (inline action per TreeItem)
 
 ## Testing
 
