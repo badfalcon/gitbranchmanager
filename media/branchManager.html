@@ -397,7 +397,9 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       const filteredRows = filterBranches(rows, searchQuery, useRegex, caseSensitive, false);
       const sortedRows = sortBranches(filteredRows, localSort.column, localSort.direction, false);
 
-      const selectColHtml = selectModeActive ? '<th class="select-col"></th>' : '';
+      const selectColHtml = selectModeActive
+        ? '<th class="select-col"><label title="' + escapeHtml(I18N.previewSelectAll) + '"><input type="checkbox" id="selectAllLocal" /></label></th>'
+        : '';
       const nameClass = 'sortable' + (localSort.column === 'name' ? ' sort-' + localSort.direction : '');
       const statusClass = 'sortable' + (localSort.column === 'status' ? ' sort-' + localSort.direction : '');
       const lastCommitClass = 'sortable' + (localSort.column === 'lastCommit' ? ' sort-' + localSort.direction : '');
@@ -414,6 +416,18 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       localEl.querySelectorAll('.sortable').forEach(th => {
         th.addEventListener('click', () => toggleSort(th.dataset.table, th.dataset.sort));
       });
+
+      // Select-all in local table header
+      const selectAllLocalEl = $('selectAllLocal');
+      if (selectAllLocalEl) {
+        selectAllLocalEl.addEventListener('change', (e) => {
+          const checked = e.target.checked;
+          localEl.querySelectorAll('input[data-local]').forEach(cb => { cb.checked = checked; });
+          updateSelectCount();
+        });
+        // Prevent the wrapping <label> click from also bubbling into row toggles
+        selectAllLocalEl.parentElement.addEventListener('click', (e) => e.stopPropagation());
+      }
 
       for (const r of sortedRows) {
         const cur = r.isCurrent ? '<span class="badge">' + escapeHtml(I18N.badgeHead) + '</span>' : '';
@@ -490,7 +504,9 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       const sortedRows = sortBranches(filteredRows, remoteSort.column, remoteSort.direction, true);
 
       // Only show select column if select mode is active AND remote deletion is allowed
-      const selectColHtml = (selectModeActive && allowRemoteDeletion) ? '<th class="select-col"></th>' : '';
+      const selectColHtml = (selectModeActive && allowRemoteDeletion)
+        ? '<th class="select-col"><label title="' + escapeHtml(I18N.previewSelectAll) + '"><input type="checkbox" id="selectAllRemote" /></label></th>'
+        : '';
       const nameClass = 'sortable' + (remoteSort.column === 'name' ? ' sort-' + remoteSort.direction : '');
       const statusClass = 'sortable' + (remoteSort.column === 'status' ? ' sort-' + remoteSort.direction : '');
       const lastCommitClass = 'sortable' + (remoteSort.column === 'lastCommit' ? ' sort-' + remoteSort.direction : '');
@@ -506,6 +522,17 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       remoteEl.querySelectorAll('.sortable').forEach(th => {
         th.addEventListener('click', () => toggleSort(th.dataset.table, th.dataset.sort));
       });
+
+      // Select-all in remote table header
+      const selectAllRemoteEl = $('selectAllRemote');
+      if (selectAllRemoteEl) {
+        selectAllRemoteEl.addEventListener('change', (e) => {
+          const checked = e.target.checked;
+          remoteEl.querySelectorAll('input[data-remote]').forEach(cb => { cb.checked = checked; });
+          updateSelectCount();
+        });
+        selectAllRemoteEl.parentElement.addEventListener('click', (e) => e.stopPropagation());
+      }
 
       for (const r of sortedRows) {
         const parts = r.short.split('/');
@@ -720,11 +747,33 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
     }
 
     function updateSelectCount() {
+      const localBoxes = document.querySelectorAll('input[data-local]');
+      const remoteBoxes = document.querySelectorAll('input[data-remote]');
       const localChecked = document.querySelectorAll('input[data-local]:checked').length;
       const remoteChecked = document.querySelectorAll('input[data-remote]:checked').length;
       const total = localChecked + remoteChecked;
       $('selectCount').textContent = I18N.selectedCount.replace('{0}', total);
       $('deleteSelected').disabled = total === 0;
+
+      syncSelectAllState($('selectAllLocal'), localBoxes.length, localChecked);
+      syncSelectAllState($('selectAllRemote'), remoteBoxes.length, remoteChecked);
+    }
+
+    function syncSelectAllState(el, total, checked) {
+      if (!el) return;
+      if (total === 0) {
+        el.checked = false;
+        el.indeterminate = false;
+      } else if (checked === total) {
+        el.checked = true;
+        el.indeterminate = false;
+      } else if (checked === 0) {
+        el.checked = false;
+        el.indeterminate = false;
+      } else {
+        el.checked = false;
+        el.indeterminate = true;
+      }
     }
 
     function deleteSelectedBranches() {
