@@ -25,8 +25,12 @@ code { font-family: var(--vscode-editor-font-family); }
 /* Select mode */
 .btn.danger { background: var(--vscode-errorForeground, #f44336); color: white; }
 .btn.toggle-active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
-.select-col { width: 30px; }
-.select-col input { cursor: pointer; }
+.select-col { width: 40px; padding: 0 !important; }
+.select-col label { display: block; cursor: pointer; padding: 10px 12px; text-align: center; box-sizing: border-box; }
+.select-col label:hover { background: var(--vscode-list-hoverBackground); }
+.select-col input { cursor: pointer; width: 16px; height: 16px; vertical-align: middle; margin: 0; }
+tr.row-selectable { cursor: pointer; }
+tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
 .hidden { display: none !important; }
 .select-actions { display: flex; gap: 8px; align-items: center; }
 .select-count { font-size: 12px; color: var(--vscode-descriptionForeground); }
@@ -434,7 +438,7 @@ code { font-family: var(--vscode-editor-font-family); }
         let checkboxHtml = '';
         if (selectModeActive) {
           checkboxHtml = canSelect
-            ? '<td class="select-col"><input type="checkbox" data-local="' + escapeHtml(r.short) + '" /></td>'
+            ? '<td class="select-col"><label><input type="checkbox" data-local="' + escapeHtml(r.short) + '" /></label></td>'
             : '<td class="select-col"></td>';
         }
 
@@ -464,6 +468,18 @@ code { font-family: var(--vscode-editor-font-family); }
       if (selectModeActive) {
         localEl.querySelectorAll('input[data-local]').forEach(cb => {
           cb.addEventListener('change', updateSelectCount);
+        });
+        // Row click toggles checkbox (except in actions/select-col areas)
+        localEl.querySelectorAll('tr').forEach(tr => {
+          const cb = tr.querySelector('input[data-local]');
+          if (!cb) return;
+          tr.classList.add('row-selectable');
+          tr.addEventListener('click', (e) => {
+            if (e.target.closest('.actions')) return;
+            if (e.target.closest('.select-col')) return;
+            cb.checked = !cb.checked;
+            updateSelectCount();
+          });
         });
       }
     }
@@ -515,7 +531,7 @@ code { font-family: var(--vscode-editor-font-family); }
         let checkboxHtml = '';
         if (selectModeActive && allowRemoteDeletion) {
           checkboxHtml = canSelect
-            ? '<td class="select-col"><input type="checkbox" data-remote="' + escapeHtml(r.short) + '" /></td>'
+            ? '<td class="select-col"><label><input type="checkbox" data-remote="' + escapeHtml(r.short) + '" /></label></td>'
             : '<td class="select-col"></td>';
         }
 
@@ -538,6 +554,18 @@ code { font-family: var(--vscode-editor-font-family); }
       if (selectModeActive && allowRemoteDeletion) {
         remoteEl.querySelectorAll('input[data-remote]').forEach(cb => {
           cb.addEventListener('change', updateSelectCount);
+        });
+        // Row click toggles checkbox (except in actions/select-col areas)
+        remoteEl.querySelectorAll('tr').forEach(tr => {
+          const cb = tr.querySelector('input[data-remote]');
+          if (!cb) return;
+          tr.classList.add('row-selectable');
+          tr.addEventListener('click', (e) => {
+            if (e.target.closest('.actions')) return;
+            if (e.target.closest('.select-col')) return;
+            cb.checked = !cb.checked;
+            updateSelectCount();
+          });
         });
       }
     }
