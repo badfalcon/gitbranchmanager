@@ -86,13 +86,14 @@ Main TypeScript module containing:
 
 ### **Webview UI** ([media/branchManager.html](media/branchManager.html))
 - Static HTML with inline CSS/JavaScript
+- **Sticky header**: Top toolbar, cleanup toolbar, and search bar are wrapped in `.sticky-header` with `position: sticky; top: 0;` so they stay pinned while scrolling (z-index `10`, below preview overlay/loading overlay/toast)
 - **Unified search bar**: Filter both local and remote branches with case sensitivity (Aa) and regex (.*) toggles
 - **Settings button**: Gear icon for quick access to extension settings
 - **Sortable columns**: Click headers to sort by Name, Status, or Last Commit
 - Tables for local and remote branches with status badges (merged/stale/gone)
 - **Local cleanup toolbar**: Merged/Stale/Gone/Cleanup All buttons
 - **Remote cleanup toolbar**: Merged/Stale/Cleanup All buttons (hidden when `allowRemoteBranchDeletion` is false)
-- **Select mode**: Toggle to show checkboxes for manual multi-select deletion
+- **Select mode**: Toggle to show checkboxes for manual multi-select deletion. Each table header gets a **select-all checkbox** (`#selectAllLocal` / `#selectAllRemote`) that toggles all currently rendered (filtered) rows; `syncSelectAllState()` updates its tri-state (checked / indeterminate / unchecked) based on per-row selection
 - **Preview modal**: Cleanup candidate preview with checkbox selection and "Add to Queue" button
 - **Toast**: Brief notification when items are added to the queue (queue itself lives in the SCM sidebar tree view)
 - i18n strings injected at runtime as base64-encoded JSON

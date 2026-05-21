@@ -4,6 +4,13 @@ All notable changes to the "gitsouji" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [1.4.2] - 2026-05-21
+
+### Added
+
+- Select-all checkbox in the local/remote table headers (visible only in Select mode); toggles the currently displayed (filtered) rows in that table and reflects a tri-state (checked / indeterminate / unchecked) based on per-row selection
+- Sticky header area that pins the top toolbar, cleanup toolbar, and search bar at the top of the webview while scrolling — search, cleanup, and Queue staging stay reachable in long branch lists
+
 ## [1.4.1] - 2026-05-21
 
 ### Changed
