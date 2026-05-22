@@ -303,49 +303,39 @@ suite('Git functions (mocked)', () => {
   // ========================================
   // detectMergedIntoOtherBranches tests
   // ========================================
-  type ContainsMap = Record<string, string[]>;
-
   // Routes runGit calls for detectMergedIntoOtherBranches:
-  // - for-each-ref -> local branch list (tab-separated, like listLocalBranches)
-  // - rev-parse    -> current branch
-  // - branch -a --contains <name> -> full refnames containing that branch
+  // - for-each-ref ... refs/heads -> "<short>\t<sha>" tip list
+  // - log --merges --pretty=tformat:%P -> parent SHAs per merge commit
+  // - rev-parse -> current branch
   function stubMergedIntoOther(opts: {
-    locals: { short: string; upstream?: string }[];
+    tips: Record<string, string>;
     current: string;
-    contains: ContainsMap;
+    /** Each entry is one merge commit's parent SHAs: [firstParent, ...mergedIn]. */
+    mergeParents: string[][];
   }) {
     runGitStub.callsFake(async (_cwd: string, args: string[]) => {
       if (args[0] === 'for-each-ref') {
-        const stdout = opts.locals
-          .map(
-            (b) =>
-              `refs/heads/${b.short}\t${b.short}\t${b.upstream ?? ''}\t\t${
-                b.short === opts.current ? '*' : ''
-              }`
-          )
+        const stdout = Object.entries(opts.tips)
+          .map(([short, sha]) => `${short}\t${sha}`)
           .join('\n');
         return { stdout };
       }
+      if (args[0] === 'log' && args.includes('--merges')) {
+        return { stdout: opts.mergeParents.map((p) => p.join(' ')).join('\n') };
+      }
       if (args[0] === 'rev-parse') {
         return { stdout: `${opts.current}\n` };
-      }
-      if (args[0] === 'branch' && args[1] === '-a' && args[2] === '--contains') {
-        const target = args[3];
-        return { stdout: (opts.contains[target] ?? []).join('\n') };
       }
       return { stdout: '' };
     });
   }
 
-  test('detectMergedIntoOtherBranches: detects branch merged into a local parent', async () => {
+  test('detectMergedIntoOtherBranches: detects branch merged into a parent via merge commit', async () => {
     stubMergedIntoOther({
-      locals: [{ short: 'main', upstream: 'origin/main' }, { short: 'feature-a' }, { short: 'feature-b' }],
+      tips: { main: 'aaa', 'feature-a': 'mmm', 'feature-b': 'ddd' },
       current: 'main',
-      contains: {
-        'feature-a': ['refs/heads/feature-a'],
-        // feature-b's tip is also contained in feature-a -> merged into parent
-        'feature-b': ['refs/heads/feature-b', 'refs/heads/feature-a'],
-      },
+      // feature-a's merge commit: first parent = old feature-a, merged-in = feature-b tip (ddd)
+      mergeParents: [['old', 'ddd']],
     });
 
     const merged = await detectMergedIntoOtherBranches('/fake/repo');
@@ -353,14 +343,13 @@ suite('Git functions (mocked)', () => {
     assert.deepStrictEqual(merged, ['feature-b']);
   });
 
-  test('detectMergedIntoOtherBranches: ignores own same-named remote counterpart', async () => {
+  test('detectMergedIntoOtherBranches: does not flag a parent branch a fork descends from', async () => {
+    // feature-b (eee) was forked from feature-a (ccc) but never merged back.
+    // No merge commit references ccc, so feature-a must NOT be flagged.
     stubMergedIntoOther({
-      locals: [{ short: 'main', upstream: 'origin/main' }, { short: 'feature' }],
+      tips: { main: 'aaa', 'feature-a': 'ccc', 'feature-b': 'eee' },
       current: 'main',
-      contains: {
-        // only itself + its same-named remote -> just pushed, not "merged"
-        feature: ['refs/heads/feature', 'refs/remotes/origin/feature'],
-      },
+      mergeParents: [],
     });
 
     const merged = await detectMergedIntoOtherBranches('/fake/repo');
@@ -368,49 +357,43 @@ suite('Git functions (mocked)', () => {
     assert.deepStrictEqual(merged, []);
   });
 
-  test('detectMergedIntoOtherBranches: counts remote-tracking branch as a parent', async () => {
+  test('detectMergedIntoOtherBranches: ignores first parent (branch merged into)', async () => {
+    // feature-a (mmm) is the first parent of its own merge commit -> merged INTO,
+    // not merged. Only the second parent (feature-b) counts.
     stubMergedIntoOther({
-      locals: [{ short: 'main', upstream: 'origin/main' }, { short: 'feature-x' }],
+      tips: { main: 'aaa', 'feature-a': 'mmm', 'feature-b': 'ddd' },
       current: 'main',
-      contains: {
-        'feature-x': ['refs/heads/feature-x', 'refs/remotes/origin/main'],
-      },
+      mergeParents: [['mmm', 'ddd']],
     });
 
     const merged = await detectMergedIntoOtherBranches('/fake/repo');
 
-    assert.deepStrictEqual(merged, ['feature-x']);
+    assert.deepStrictEqual(merged, ['feature-b']);
   });
 
   test('detectMergedIntoOtherBranches: excludes current and protected branches', async () => {
+    // develop (protected) and main (current) are merge-in parents but must be skipped.
     stubMergedIntoOther({
-      locals: [{ short: 'main' }, { short: 'develop' }, { short: 'feature' }],
+      tips: { main: 'aaa', develop: 'bbb', feature: 'fff' },
       current: 'main',
-      contains: {
-        // even if reported as contained elsewhere, main(current)/develop(protected) are skipped
-        feature: ['refs/heads/feature'],
-        develop: ['refs/heads/develop', 'refs/heads/main'],
-      },
+      mergeParents: [['x', 'aaa'], ['y', 'bbb'], ['z', 'fff']],
     });
 
     const merged = await detectMergedIntoOtherBranches('/fake/repo');
 
-    assert.deepStrictEqual(merged, []);
+    assert.deepStrictEqual(merged, ['feature']);
   });
 
-  test('detectMergedIntoOtherBranches: normalizes slashed names and remote prefixes', async () => {
+  test('detectMergedIntoOtherBranches: handles octopus merges (3+ parents)', async () => {
     stubMergedIntoOther({
-      locals: [{ short: 'main', upstream: 'origin/main' }, { short: 'feature/login' }],
+      tips: { main: 'aaa', 'feature-x': 'xxx', 'feature-y': 'yyy' },
       current: 'main',
-      contains: {
-        // self as local + self via remote (with a slash in the name) -> not merged
-        'feature/login': ['refs/heads/feature/login', 'refs/remotes/origin/feature/login'],
-      },
+      mergeParents: [['old', 'xxx', 'yyy']],
     });
 
     const merged = await detectMergedIntoOtherBranches('/fake/repo');
 
-    assert.deepStrictEqual(merged, []);
+    assert.deepStrictEqual(merged.sort(), ['feature-x', 'feature-y']);
   });
 
   // ========================================
@@ -423,29 +406,22 @@ suite('Git functions (mocked)', () => {
       }
       if (args[0] === 'for-each-ref') {
         return {
-          stdout: [
-            'refs/heads/main\tmain\torigin/main\t\t*',
-            'refs/heads/bugfix-1\tbugfix-1\t\t\t',
-            'refs/heads/feature-b\tfeature-b\t\t\t',
-          ].join('\n'),
+          stdout: ['main\taaa', 'bugfix-1\tbbb', 'feature-b\tddd'].join('\n'),
         };
+      }
+      if (args[0] === 'log' && args.includes('--merges')) {
+        // feature-b (ddd) merged into a parent via a merge commit
+        return { stdout: 'old ddd' };
       }
       if (args[0] === 'rev-parse') {
         return { stdout: 'main\n' };
-      }
-      if (args[0] === 'branch' && args[1] === '-a' && args[2] === '--contains') {
-        const target = args[3];
-        if (target === 'feature-b') {
-          return { stdout: 'refs/heads/feature-b\nrefs/heads/feature-a' };
-        }
-        return { stdout: `refs/heads/${target}` };
       }
       return { stdout: '' };
     });
 
     const merged = await getMergedBranchSet('/fake/repo', 'main');
 
-    // bugfix-1 from base --merged, feature-b from parent containment
+    // bugfix-1 from base --merged, feature-b from parent merge commit
     assert.strictEqual(merged.size, 2);
     assert.ok(merged.has('bugfix-1'));
     assert.ok(merged.has('feature-b'));

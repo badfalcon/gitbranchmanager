@@ -543,66 +543,95 @@ export async function detectGoneBranches(cwd: string): Promise<string[]> {
 }
 
 /**
- * Extract the branch name from a full refname, dropping the local/remote prefix.
- * - refs/heads/feature/login        -> "feature/login"
- * - refs/remotes/origin/feature      -> "feature" (remote name has no '/')
- * - refs/remotes/origin/HEAD or HEAD -> undefined (pointer, not a branch)
+ * Map local branch name -> tip commit SHA.
  */
-function branchNameFromRefname(refname: string): string | undefined {
-  if (refname.startsWith('refs/heads/')) {
-    return refname.slice('refs/heads/'.length);
+async function getLocalBranchTips(cwd: string): Promise<Map<string, string>> {
+  const { stdout } = await runGit(cwd, [
+    'for-each-ref',
+    '--format',
+    '%(refname:short)\t%(objectname)',
+    'refs/heads',
+  ]);
+
+  const map = new Map<string, string>();
+  for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
+    const [short, sha] = line.split('\t');
+    if (short && sha) {
+      map.set(short, sha);
+    }
   }
-  if (refname.startsWith('refs/remotes/')) {
-    const rest = refname.slice('refs/remotes/'.length);
-    const name = rest.split('/').slice(1).join('/');
-    return name === 'HEAD' ? undefined : name;
-  }
-  return undefined;
+  return map;
 }
 
 /**
- * Detect local branches whose tip is contained in some other branch — i.e. they
- * have been merged into a parent branch, even one that has not yet reached the
- * base branch (e.g. a stacked `feature-b` merged into `feature-a`).
+ * Collect commit SHAs that were merged INTO another line of history: the
+ * 2nd-or-later parents of every merge commit reachable from any local or
+ * remote-tracking branch.
  *
- * Uses `git branch -a --contains <branch>` so both local and remote-tracking
- * branches count as merge targets. A branch's own same-named remote counterpart
- * (e.g. local `feature` vs `origin/feature`) is treated as the same branch and
- * ignored, so merely pushing a branch does not mark it merged.
+ * Being a merge-in parent is what distinguishes "this branch was merged into a
+ * parent" from "this branch merely has descendants" (a branch forked off it):
+ * a forked branch's tip is only ever a first-parent ancestor, never a merge-in
+ * parent, so it is not collected here — which avoids falsely flagging the parent
+ * branch (e.g. feature-a) as merged just because feature-b branched from it.
+ *
+ * Degrades gracefully (empty set) if the history walk fails, e.g. the output
+ * exceeds runGit's buffer in a very large repo.
+ */
+async function getMergeParentCommits(cwd: string): Promise<Set<string>> {
+  const set = new Set<string>();
+  try {
+    // %P prints all parent SHAs space-separated: "<first-parent> <merged-in...>".
+    const { stdout } = await runGit(cwd, [
+      'log',
+      '--branches',
+      '--remotes',
+      '--merges',
+      '--pretty=tformat:%P',
+    ]);
+
+    for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
+      const parents = line.trim().split(/\s+/);
+      // Skip parents[0] (the branch merged into); the rest were merged in.
+      for (let i = 1; i < parents.length; i++) {
+        set.add(parents[i]);
+      }
+    }
+  } catch {
+    // ignore: parent-merge detection simply unavailable for this repo
+  }
+  return set;
+}
+
+/**
+ * Detect local branches that were merged into a parent branch via a merge commit,
+ * even one that has not yet reached the base branch (e.g. a stacked feature-b
+ * merged back into feature-a).
+ *
+ * A branch counts only when its tip commit is a merge-in parent (see
+ * getMergeParentCommits), so branches that merely have descendants are not
+ * flagged — Git cannot otherwise tell "merged into" apart from "branched off".
+ *
+ * Note: fast-forward and squash merges leave no merge commit and are not detected
+ * here; merges into the base branch remain covered by detectDeadBranches.
  */
 export async function detectMergedIntoOtherBranches(cwd: string): Promise<string[]> {
-  const branches = await listLocalBranches(cwd);
-  const current = await getCurrentBranch(cwd);
   const cfg = getCfg();
+  const [tips, mergeParents, current] = await Promise.all([
+    getLocalBranchTips(cwd),
+    getMergeParentCommits(cwd),
+    getCurrentBranch(cwd),
+  ]);
 
-  const results = await Promise.all(
-    branches.map(async (b) => {
-      if (b.short === current || isProtectedBranch(b.short, cfg.protected)) {
-        return undefined;
-      }
-      try {
-        const { stdout } = await runGit(cwd, [
-          'branch',
-          '-a',
-          '--contains',
-          b.short,
-          '--format',
-          '%(refname)',
-        ]);
-        const mergedIntoOther = stdout
-          .split(/\r?\n/)
-          .map((s) => s.trim())
-          .filter(Boolean)
-          .map(branchNameFromRefname)
-          .some((name) => name !== undefined && name !== b.short);
-        return mergedIntoOther ? b.short : undefined;
-      } catch {
-        return undefined;
-      }
-    })
-  );
-
-  return results.filter((n): n is string => !!n);
+  const merged: string[] = [];
+  for (const [short, sha] of tips) {
+    if (short === current || isProtectedBranch(short, cfg.protected)) {
+      continue;
+    }
+    if (mergeParents.has(sha)) {
+      merged.push(short);
+    }
+  }
+  return merged;
 }
 
 /**
