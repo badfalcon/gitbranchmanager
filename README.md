@@ -34,7 +34,7 @@ A VS Code extension for cleaning up Git branches (detect and delete dead/stale/g
 
 #### Deletion Queue (Activity Bar View)
 - Git Souji has its own **Activity Bar container** with a **Deletion Queue** tree view
-- Branches added from cleanup previews or from select mode show up as queue items with per-item status icons (pending / spinning / ✓ / ✗)
+- Branches added from cleanup previews or from row selection show up as queue items with per-item status icons (pending / spinning / ✓ / ✗)
 - View title actions:
   - **Execute** (▶): Run all queued deletions; progress is reported via a VS Code notification with per-item updates in the tree
   - **Clear**: Empty the queue
@@ -43,8 +43,8 @@ A VS Code extension for cleaning up Git branches (detect and delete dead/stale/g
 - Welcome content links to **Open Git Souji** when the queue is empty
 - Single-row Delete buttons in the webview bypass the queue and execute immediately
 
-#### Select Mode
-- Toggle select mode to manually pick branches for deletion
+#### Branch Selection
+- Selection checkboxes are always available to manually pick branches for deletion — no mode to toggle
 - Works for both local and remote branches simultaneously
 - A **select-all checkbox** appears in each table header to toggle all currently visible (filtered) rows at once; combine with the search bar to bulk-select matching branches
 - Selected branches are staged into the Deletion Queue for later execution

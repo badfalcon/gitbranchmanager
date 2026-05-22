@@ -23,9 +23,8 @@ body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); 
 code { font-family: var(--vscode-editor-font-family); }
 .last-commit { font-size: 11px; color: var(--vscode-descriptionForeground); white-space: nowrap; }
 
-/* Select mode */
+/* Branch selection */
 .btn.danger { background: var(--vscode-errorForeground, #f44336); color: white; }
-.btn.toggle-active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
 .select-col { width: 40px; padding: 0 !important; }
 .select-col label { display: block; cursor: pointer; padding: 10px 12px; text-align: center; box-sizing: border-box; }
 .select-col label:hover { background: var(--vscode-list-hoverBackground); }
@@ -86,10 +85,9 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
     <div class="toolbar">
       <button class="btn primary" id="refresh"></button>
       <button class="btn" id="create"></button>
-      <button class="btn" id="selectMode"></button>
       <span id="repo"></span>
       <span id="error" style="color: var(--vscode-errorForeground);"></span>
-      <div class="select-actions hidden" id="selectActions">
+      <div class="select-actions" id="selectActions">
         <span class="select-count" id="selectCount"></span>
         <button class="btn primary" id="deleteSelected"></button>
       </div>
@@ -176,7 +174,6 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
     // Current state cache
     let currentState = null;
     let cleanupMode = 'local'; // 'local' or 'remote'
-    let selectModeActive = false;
 
     // Sort state for each table
     let localSort = { column: 'name', direction: 'asc' };
@@ -193,7 +190,6 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
     $('loadingText').textContent = I18N.loading;
     $('refresh').textContent = I18N.refresh;
     $('create').textContent = I18N.create;
-    $('selectMode').textContent = I18N.selectMode;
     $('deleteSelected').textContent = I18N.previewAddToQueue;
     $('localTitle').textContent = I18N.localBranches;
     $('remoteTitle').textContent = I18N.remoteBranches;
@@ -226,7 +222,6 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
     // Event listeners
     $('refresh').addEventListener('click', () => vscode.postMessage({ type: 'refresh' }));
     $('create').addEventListener('click', () => vscode.postMessage({ type: 'create' }));
-    $('selectMode').addEventListener('click', toggleSelectMode);
     $('deleteSelected').addEventListener('click', deleteSelectedBranches);
     $('openSettings').addEventListener('click', () => vscode.postMessage({ type: 'openSettings' }));
 
@@ -409,9 +404,7 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       const filteredRows = filterBranches(rows, searchQuery, useRegex, caseSensitive, false);
       const sortedRows = sortBranches(filteredRows, localSort.column, localSort.direction, false);
 
-      const selectColHtml = selectModeActive
-        ? '<th class="select-col"><label title="' + escapeHtml(I18N.previewSelectAll) + '"><input type="checkbox" id="selectAllLocal" /></label></th>'
-        : '';
+      const selectColHtml = '<th class="select-col"><label title="' + escapeHtml(I18N.previewSelectAll) + '"><input type="checkbox" id="selectAllLocal" /></label></th>';
       const nameClass = 'sortable' + (localSort.column === 'name' ? ' sort-' + localSort.direction : '');
       const statusClass = 'sortable' + (localSort.column === 'status' ? ' sort-' + localSort.direction : '');
       const lastCommitClass = 'sortable' + (localSort.column === 'lastCommit' ? ' sort-' + localSort.direction : '');
@@ -460,14 +453,11 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
           lastCommitHtml = '<span class="last-commit">' + escapeHtml(I18N.daysAgo.replace('{0}', r.lastCommitAgeInDays)) + '</span>';
         }
 
-        // Checkbox for select mode (hidden for current branch and protected)
+        // Selection checkbox (hidden for current branch and protected)
         const canSelect = !r.isCurrent && !r.protected;
-        let checkboxHtml = '';
-        if (selectModeActive) {
-          checkboxHtml = canSelect
-            ? '<td class="select-col"><label><input type="checkbox" data-local="' + escapeHtml(r.short) + '"' + (isQueued(r.short, 'local') ? ' checked' : '') + ' /></label></td>'
-            : '<td class="select-col"></td>';
-        }
+        const checkboxHtml = canSelect
+          ? '<td class="select-col"><label><input type="checkbox" data-local="' + escapeHtml(r.short) + '"' + (isQueued(r.short, 'local') ? ' checked' : '') + ' /></label></td>'
+          : '<td class="select-col"></td>';
 
         const tr = document.createElement('tr');
         tr.innerHTML = checkboxHtml + '<td>' + cur + '</td>'
@@ -491,24 +481,22 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
         localEl.appendChild(tr);
       }
 
-      // Attach change listeners for select-mode checkboxes (CSP blocks inline onchange)
-      if (selectModeActive) {
-        localEl.querySelectorAll('input[data-local]').forEach(cb => {
-          cb.addEventListener('change', updateSelectCount);
+      // Attach change listeners for selection checkboxes (CSP blocks inline onchange)
+      localEl.querySelectorAll('input[data-local]').forEach(cb => {
+        cb.addEventListener('change', updateSelectCount);
+      });
+      // Row click toggles checkbox (except in actions/select-col areas)
+      localEl.querySelectorAll('tr').forEach(tr => {
+        const cb = tr.querySelector('input[data-local]');
+        if (!cb) return;
+        tr.classList.add('row-selectable');
+        tr.addEventListener('click', (e) => {
+          if (e.target.closest('.actions')) return;
+          if (e.target.closest('.select-col')) return;
+          cb.checked = !cb.checked;
+          updateSelectCount();
         });
-        // Row click toggles checkbox (except in actions/select-col areas)
-        localEl.querySelectorAll('tr').forEach(tr => {
-          const cb = tr.querySelector('input[data-local]');
-          if (!cb) return;
-          tr.classList.add('row-selectable');
-          tr.addEventListener('click', (e) => {
-            if (e.target.closest('.actions')) return;
-            if (e.target.closest('.select-col')) return;
-            cb.checked = !cb.checked;
-            updateSelectCount();
-          });
-        });
-      }
+      });
     }
 
     function renderRemote(rows, showBadges, allowRemoteDeletion) {
@@ -516,8 +504,8 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       const filteredRows = filterBranches(rows, searchQuery, useRegex, caseSensitive, true);
       const sortedRows = sortBranches(filteredRows, remoteSort.column, remoteSort.direction, true);
 
-      // Only show select column if select mode is active AND remote deletion is allowed
-      const selectColHtml = (selectModeActive && allowRemoteDeletion)
+      // Only show select column if remote deletion is allowed
+      const selectColHtml = allowRemoteDeletion
         ? '<th class="select-col"><label title="' + escapeHtml(I18N.previewSelectAll) + '"><input type="checkbox" id="selectAllRemote" /></label></th>'
         : '';
       const nameClass = 'sortable' + (remoteSort.column === 'name' ? ' sort-' + remoteSort.direction : '');
@@ -566,10 +554,10 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
           lastCommitHtml = '<span class="last-commit">' + escapeHtml(I18N.daysAgo.replace('{0}', r.lastCommitAgeInDays)) + '</span>';
         }
 
-        // Checkbox for select mode (hidden for protected)
+        // Selection checkbox (hidden for protected; only when remote deletion is allowed)
         const canSelect = !r.protected && allowRemoteDeletion;
         let checkboxHtml = '';
-        if (selectModeActive && allowRemoteDeletion) {
+        if (allowRemoteDeletion) {
           checkboxHtml = canSelect
             ? '<td class="select-col"><label><input type="checkbox" data-remote="' + escapeHtml(r.short) + '"' + (isQueued(r.short, 'remote') ? ' checked' : '') + ' /></label></td>'
             : '<td class="select-col"></td>';
@@ -590,8 +578,8 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
         remoteEl.appendChild(tr);
       }
 
-      // Attach change listeners for select-mode checkboxes (CSP blocks inline onchange)
-      if (selectModeActive && allowRemoteDeletion) {
+      // Attach change listeners for selection checkboxes (CSP blocks inline onchange)
+      if (allowRemoteDeletion) {
         remoteEl.querySelectorAll('input[data-remote]').forEach(cb => {
           cb.addEventListener('change', updateSelectCount);
         });
@@ -750,15 +738,6 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       return b;
     }
 
-    function toggleSelectMode() {
-      selectModeActive = !selectModeActive;
-      $('selectMode').classList.toggle('toggle-active', selectModeActive);
-      $('selectActions').classList.toggle('hidden', !selectModeActive);
-      if (currentState) {
-        render(currentState);
-      }
-    }
-
     function updateSelectCount() {
       const localBoxes = document.querySelectorAll('input[data-local]');
       const remoteBoxes = document.querySelectorAll('input[data-remote]');
@@ -803,11 +782,10 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       ];
       sendToQueue(items);
 
-      // Exit select mode
-      selectModeActive = false;
-      $('selectMode').classList.remove('toggle-active');
-      $('selectActions').classList.add('hidden');
-      if (currentState) render(currentState);
+      // Clear the current selection after staging
+      document.querySelectorAll('input[data-local]:checked, input[data-remote]:checked')
+        .forEach(cb => { cb.checked = false; });
+      updateSelectCount();
     }
 
     function escapeHtml(s) {

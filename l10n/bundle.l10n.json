@@ -114,7 +114,6 @@
   "{0} branches are not fully merged. Force delete them?": "{0} branches are not fully merged. Force delete them?",
   "Delete {0} selected remote branches?": "Delete {0} selected remote branches?",
   "Delete {0} selected branches?": "Delete {0} selected branches?",
-  "Select": "Select",
   "{0} selected": "{0} selected",
   "Also delete {0} remote branches with same name (not tracked)?": "Also delete {0} remote branches with same name (not tracked)?",
   "Search branches...": "Search branches...",

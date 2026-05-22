@@ -114,7 +114,6 @@
   "{0} branches are not fully merged. Force delete them?": "{0} 件のブランチはマージされていません。強制削除しますか？",
   "Delete {0} selected remote branches?": "選択した {0} 件のリモートブランチを削除しますか？",
   "Delete {0} selected branches?": "選択した {0} 件のブランチを削除しますか？",
-  "Select": "選択",
   "{0} selected": "{0} 件選択中",
   "Also delete {0} remote branches with same name (not tracked)?": "同名のリモートブランチ（未追跡）も {0} 件削除しますか？",
   "Search branches...": "ブランチを検索...",
