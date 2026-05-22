@@ -32,9 +32,10 @@ type State = {
   staleDays?: number;
   showStatusBadges?: boolean;
   allowRemoteBranchDeletion?: boolean;
+  queued?: { name: string; kind: 'local' | 'remote' }[];
 };
 
-async function getState(repoRoot: string): Promise<State> {
+async function getState(repoRoot: string, queueProvider: QueueTreeProvider): Promise<State> {
   const cfg = getCfg();
 
   // Auto fetch with prune if enabled (updates remote tracking refs before detection)
@@ -66,6 +67,7 @@ async function getState(repoRoot: string): Promise<State> {
     staleDays: cfg.staleDays,
     showStatusBadges: cfg.showStatusBadges,
     allowRemoteBranchDeletion: cfg.allowRemoteBranchDeletion,
+    queued: queueProvider.getQueuedBranches(),
   };
 }
 
@@ -111,7 +113,7 @@ export async function openManagerPanel(
   const refresh = async () => {
     panel.webview.postMessage({ type: 'loading' });
     try {
-      const state = await getState(repo.repoRoot);
+      const state = await getState(repo.repoRoot, queueProvider);
       panel.webview.postMessage({ type: 'state', state });
     } catch (err: any) {
       panel.webview.postMessage({ type: 'error', message: err?.message ?? String(err) });
@@ -254,7 +256,11 @@ export async function openManagerPanel(
 
           case 'addToQueue': {
             const added = queueProvider.add(msg.items);
-            panel.webview.postMessage({ type: 'queueAdded', count: added });
+            panel.webview.postMessage({
+              type: 'queueAdded',
+              count: added,
+              queued: queueProvider.getQueuedBranches(),
+            });
             break;
           }
         }

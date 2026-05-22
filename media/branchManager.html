@@ -300,6 +300,9 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
         errEl.textContent = msg.message || I18N.errorFallback;
         setLoading(false);
       } else if (msg.type === 'queueAdded') {
+        if (currentState && msg.queued) {
+          currentState.queued = msg.queued;
+        }
         if (msg.count > 0) {
           showToast(I18N.queueAddedCount.replace('{0}', msg.count));
         }
@@ -380,6 +383,12 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       }
     }
 
+    // True if a branch is already staged in the deletion queue (display-only check).
+    function isQueued(name, kind) {
+      return !!(currentState && currentState.queued
+        && currentState.queued.some(q => q.name === name && q.kind === kind));
+    }
+
     function render(state) {
       repoEl.textContent = state.repoRoot;
       localEl.innerHTML = '';
@@ -456,7 +465,7 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
         let checkboxHtml = '';
         if (selectModeActive) {
           checkboxHtml = canSelect
-            ? '<td class="select-col"><label><input type="checkbox" data-local="' + escapeHtml(r.short) + '" /></label></td>'
+            ? '<td class="select-col"><label><input type="checkbox" data-local="' + escapeHtml(r.short) + '"' + (isQueued(r.short, 'local') ? ' checked' : '') + ' /></label></td>'
             : '<td class="select-col"></td>';
         }
 
@@ -562,7 +571,7 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
         let checkboxHtml = '';
         if (selectModeActive && allowRemoteDeletion) {
           checkboxHtml = canSelect
-            ? '<td class="select-col"><label><input type="checkbox" data-remote="' + escapeHtml(r.short) + '" /></label></td>'
+            ? '<td class="select-col"><label><input type="checkbox" data-remote="' + escapeHtml(r.short) + '"' + (isQueued(r.short, 'remote') ? ' checked' : '') + ' /></label></td>'
             : '<td class="select-col"></td>';
         }
 

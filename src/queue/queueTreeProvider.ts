@@ -79,6 +79,11 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
     return this.queue.some(q => q.status === 'pending');
   }
 
+  /** Branch name+kind pairs currently in the queue (for webview display). */
+  getQueuedBranches(): { name: string; kind: 'local' | 'remote' }[] {
+    return this.queue.map(q => ({ name: q.name, kind: q.kind }));
+  }
+
   async execute(): Promise<void> {
     if (this.executing) {
       return;
