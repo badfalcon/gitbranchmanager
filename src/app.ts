@@ -22,8 +22,15 @@ export type BranchRow = {
   protected?: boolean;
 
   // Cleanup status indicators
-  /** Branch is merged into base branch */
+  /** Branch is merged into base branch (safe `git branch -d` cleanup candidate) */
   isMerged?: boolean;
+  /**
+   * Branch was merged into a non-base parent branch via a merge commit, but has
+   * not reached the base branch. Display-only: it earns a "merged" badge but is
+   * intentionally excluded from cleanup candidates, since `git branch -d` would
+   * reject it.
+   */
+  isMergedIntoParent?: boolean;
   /** Last commit older than staleDays threshold */
   isStale?: boolean;
   /** Upstream no longer exists (shows [gone]) */
@@ -635,16 +642,11 @@ export async function detectMergedIntoOtherBranches(cwd: string): Promise<string
 }
 
 /**
- * Get Set of merged branch names (for efficient lookup).
- * Union of branches merged into the base branch and branches merged into any
- * other parent branch.
+ * Get Set of branches merged into the base branch (safe cleanup candidates).
  */
 export async function getMergedBranchSet(cwd: string, base: string): Promise<Set<string>> {
-  const [dead, mergedIntoOther] = await Promise.all([
-    detectDeadBranches(cwd, base),
-    detectMergedIntoOtherBranches(cwd),
-  ]);
-  return new Set([...dead, ...mergedIntoOther]);
+  const dead = await detectDeadBranches(cwd, base);
+  return new Set(dead);
 }
 
 /**
@@ -670,15 +672,20 @@ export async function listLocalBranchesWithStatus(
   baseBranch: string,
   staleDays: number
 ): Promise<BranchRow[]> {
-  const [branches, mergedSet, datesMap, goneSet] = await Promise.all([
+  const [branches, mergedSet, parentMergedList, datesMap, goneSet] = await Promise.all([
     listLocalBranches(cwd),
     getMergedBranchSet(cwd, baseBranch),
+    detectMergedIntoOtherBranches(cwd),
     getBranchLastCommitDates(cwd),
     getGoneBranchSet(cwd),
   ]);
 
+  const parentMergedSet = new Set(parentMergedList);
+
   for (const b of branches) {
     b.isMerged = mergedSet.has(b.short);
+    // Display-only badge for parent-merges; base-merged branches already covered.
+    b.isMergedIntoParent = !b.isMerged && parentMergedSet.has(b.short);
     b.isGone = goneSet.has(b.short);
 
     const dateInfo = datesMap.get(b.short);

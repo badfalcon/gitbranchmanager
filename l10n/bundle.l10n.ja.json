@@ -87,6 +87,8 @@
   "HEAD": "HEAD",
 
   "merged": "マージ済",
+  "merged (parent)": "マージ済(親)",
+  "Merged into a parent branch but not the base branch. Excluded from cleanup because git cannot safely delete it yet.": "親ブランチにはマージ済みですが、ベースブランチには未到達です。git で安全に削除できないため、クリーンアップ対象から除外しています。",
   "stale": "古い",
   "gone": "削除済",
 

@@ -306,6 +306,8 @@ type WebviewI18n = {
 
   badgeHead: string;
   badgeMerged: string;
+  badgeMergedParent: string;
+  badgeMergedParentTitle: string;
   badgeStale: string;
   badgeGone: string;
 
@@ -380,6 +382,10 @@ function getWebviewI18n(): WebviewI18n {
 
     badgeHead: vscode.l10n.t('HEAD'),
     badgeMerged: vscode.l10n.t('merged'),
+    badgeMergedParent: vscode.l10n.t('merged (parent)'),
+    badgeMergedParentTitle: vscode.l10n.t(
+      'Merged into a parent branch but not the base branch. Excluded from cleanup because git cannot safely delete it yet.'
+    ),
     badgeStale: vscode.l10n.t('stale'),
     badgeGone: vscode.l10n.t('gone'),
 

@@ -310,7 +310,7 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
     function getStatusPriority(branch) {
       let p = 0;
       if (branch.isGone) p += 4;
-      if (branch.isMerged) p += 2;
+      if (branch.isMerged || branch.isMergedIntoParent) p += 2;
       if (branch.isStale) p += 1;
       return p;
     }
@@ -439,6 +439,7 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
         let statusHtml = '<div class="status-badges">';
         if (showBadges !== false) {
           if (r.isMerged) statusHtml += '<span class="badge badge-merged">' + escapeHtml(I18N.badgeMerged) + '</span>';
+          else if (r.isMergedIntoParent) statusHtml += '<span class="badge badge-merged" title="' + escapeHtml(I18N.badgeMergedParentTitle) + '">' + escapeHtml(I18N.badgeMergedParent) + '</span>';
           if (r.isStale) statusHtml += '<span class="badge badge-stale">' + escapeHtml(I18N.badgeStale) + '</span>';
           if (r.isGone) statusHtml += '<span class="badge badge-gone">' + escapeHtml(I18N.badgeGone) + '</span>';
         }
