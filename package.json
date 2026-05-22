@@ -113,6 +113,12 @@
           "default": false,
           "markdownDescription": "%config.autoFetchPrune.description%"
         },
+        "gitSouji.detectParentMerges": {
+          "order": 4,
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.detectParentMerges.description%"
+        },
         "gitSouji.protectedBranches": {
           "order": 10,
           "type": "array",

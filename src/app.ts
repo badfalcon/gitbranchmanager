@@ -22,8 +22,15 @@ export type BranchRow = {
   protected?: boolean;
 
   // Cleanup status indicators
-  /** Branch is merged into base branch */
+  /** Branch is merged into base branch (safe `git branch -d` cleanup candidate) */
   isMerged?: boolean;
+  /**
+   * Branch was merged into a non-base parent branch via a merge commit, but has
+   * not reached the base branch. Display-only: it earns a "merged" badge but is
+   * intentionally excluded from cleanup candidates, since `git branch -d` would
+   * reject it.
+   */
+  isMergedIntoParent?: boolean;
   /** Last commit older than staleDays threshold */
   isStale?: boolean;
   /** Upstream no longer exists (shows [gone]) */
@@ -74,6 +81,7 @@ export type ExtensionConfig = {
   // New cleanup settings
   staleDays: number;
   autoFetchPrune: boolean;
+  detectParentMerges: boolean;
   showStatusBadges: boolean;
   allowRemoteBranchDeletion: boolean;
 };
@@ -89,6 +97,7 @@ export function getCfg(): ExtensionConfig {
     // New cleanup settings
     staleDays: cfg.get<number>('staleDays', 30),
     autoFetchPrune: cfg.get<boolean>('autoFetchPrune', false),
+    detectParentMerges: cfg.get<boolean>('detectParentMerges', true),
     showStatusBadges: cfg.get<boolean>('showStatusBadges', true),
     allowRemoteBranchDeletion: cfg.get<boolean>('allowRemoteBranchDeletion', false),
   };
@@ -543,7 +552,99 @@ export async function detectGoneBranches(cwd: string): Promise<string[]> {
 }
 
 /**
- * Get Set of merged branch names (for efficient lookup).
+ * Map local branch name -> tip commit SHA.
+ */
+async function getLocalBranchTips(cwd: string): Promise<Map<string, string>> {
+  const { stdout } = await runGit(cwd, [
+    'for-each-ref',
+    '--format',
+    '%(refname:short)\t%(objectname)',
+    'refs/heads',
+  ]);
+
+  const map = new Map<string, string>();
+  for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
+    const [short, sha] = line.split('\t');
+    if (short && sha) {
+      map.set(short, sha);
+    }
+  }
+  return map;
+}
+
+/**
+ * Collect commit SHAs that were merged INTO another line of history: the
+ * 2nd-or-later parents of every merge commit reachable from any local or
+ * remote-tracking branch.
+ *
+ * Being a merge-in parent is what distinguishes "this branch was merged into a
+ * parent" from "this branch merely has descendants" (a branch forked off it):
+ * a forked branch's tip is only ever a first-parent ancestor, never a merge-in
+ * parent, so it is not collected here — which avoids falsely flagging the parent
+ * branch (e.g. feature-a) as merged just because feature-b branched from it.
+ *
+ * Degrades gracefully (empty set) if the history walk fails, e.g. the output
+ * exceeds runGit's buffer in a very large repo.
+ */
+async function getMergeParentCommits(cwd: string): Promise<Set<string>> {
+  const set = new Set<string>();
+  try {
+    // %P prints all parent SHAs space-separated: "<first-parent> <merged-in...>".
+    const { stdout } = await runGit(cwd, [
+      'log',
+      '--branches',
+      '--remotes',
+      '--merges',
+      '--pretty=tformat:%P',
+    ]);
+
+    for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
+      const parents = line.trim().split(/\s+/);
+      // Skip parents[0] (the branch merged into); the rest were merged in.
+      for (let i = 1; i < parents.length; i++) {
+        set.add(parents[i]);
+      }
+    }
+  } catch {
+    // ignore: parent-merge detection simply unavailable for this repo
+  }
+  return set;
+}
+
+/**
+ * Detect local branches that were merged into a parent branch via a merge commit,
+ * even one that has not yet reached the base branch (e.g. a stacked feature-b
+ * merged back into feature-a).
+ *
+ * A branch counts only when its tip commit is a merge-in parent (see
+ * getMergeParentCommits), so branches that merely have descendants are not
+ * flagged — Git cannot otherwise tell "merged into" apart from "branched off".
+ *
+ * Note: fast-forward and squash merges leave no merge commit and are not detected
+ * here; merges into the base branch remain covered by detectDeadBranches.
+ */
+export async function detectMergedIntoOtherBranches(cwd: string): Promise<string[]> {
+  const cfg = getCfg();
+  const [tips, mergeParents, current] = await Promise.all([
+    getLocalBranchTips(cwd),
+    getMergeParentCommits(cwd),
+    getCurrentBranch(cwd),
+  ]);
+
+  const merged: string[] = [];
+  for (const [short, sha] of tips) {
+    if (short === current || isProtectedBranch(short, cfg.protected)) {
+      continue;
+    }
+    if (mergeParents.has(sha)) {
+      merged.push(short);
+    }
+  }
+  return merged;
+}
+
+/**
+ * Get Set of branches merged into the base branch (safe cleanup candidates).
  */
 export async function getMergedBranchSet(cwd: string, base: string): Promise<Set<string>> {
   const dead = await detectDeadBranches(cwd, base);
@@ -571,17 +672,23 @@ export async function fetchWithPrune(cwd: string, remote = 'origin'): Promise<vo
 export async function listLocalBranchesWithStatus(
   cwd: string,
   baseBranch: string,
-  staleDays: number
+  staleDays: number,
+  detectParentMerges = true
 ): Promise<BranchRow[]> {
-  const [branches, mergedSet, datesMap, goneSet] = await Promise.all([
+  const [branches, mergedSet, parentMergedList, datesMap, goneSet] = await Promise.all([
     listLocalBranches(cwd),
     getMergedBranchSet(cwd, baseBranch),
+    detectParentMerges ? detectMergedIntoOtherBranches(cwd) : Promise.resolve([]),
     getBranchLastCommitDates(cwd),
     getGoneBranchSet(cwd),
   ]);
 
+  const parentMergedSet = new Set(parentMergedList);
+
   for (const b of branches) {
     b.isMerged = mergedSet.has(b.short);
+    // Display-only badge for parent-merges; base-merged branches already covered.
+    b.isMergedIntoParent = !b.isMerged && parentMergedSet.has(b.short);
     b.isGone = goneSet.has(b.short);
 
     const dateInfo = datesMap.get(b.short);

@@ -165,6 +165,8 @@ import {
   listRemoteBranches,
   getCurrentBranch,
   detectDeadBranches,
+  detectMergedIntoOtherBranches,
+  getMergedBranchSet,
   detectGoneBranches,
   detectStaleBranches,
   getBranchLastCommitDates,
@@ -296,6 +298,118 @@ suite('Git functions (mocked)', () => {
     // Should exclude: main (protected), feature/done (current), develop (protected)
     assert.strictEqual(dead.length, 1);
     assert.strictEqual(dead[0], 'bugfix-123');
+  });
+
+  // ========================================
+  // detectMergedIntoOtherBranches tests
+  // ========================================
+  // Routes runGit calls for detectMergedIntoOtherBranches:
+  // - for-each-ref ... refs/heads -> "<short>\t<sha>" tip list
+  // - log --merges --pretty=tformat:%P -> parent SHAs per merge commit
+  // - rev-parse -> current branch
+  function stubMergedIntoOther(opts: {
+    tips: Record<string, string>;
+    current: string;
+    /** Each entry is one merge commit's parent SHAs: [firstParent, ...mergedIn]. */
+    mergeParents: string[][];
+  }) {
+    runGitStub.callsFake(async (_cwd: string, args: string[]) => {
+      if (args[0] === 'for-each-ref') {
+        const stdout = Object.entries(opts.tips)
+          .map(([short, sha]) => `${short}\t${sha}`)
+          .join('\n');
+        return { stdout };
+      }
+      if (args[0] === 'log' && args.includes('--merges')) {
+        return { stdout: opts.mergeParents.map((p) => p.join(' ')).join('\n') };
+      }
+      if (args[0] === 'rev-parse') {
+        return { stdout: `${opts.current}\n` };
+      }
+      return { stdout: '' };
+    });
+  }
+
+  test('detectMergedIntoOtherBranches: detects branch merged into a parent via merge commit', async () => {
+    stubMergedIntoOther({
+      tips: { main: 'aaa', 'feature-a': 'mmm', 'feature-b': 'ddd' },
+      current: 'main',
+      // feature-a's merge commit: first parent = old feature-a, merged-in = feature-b tip (ddd)
+      mergeParents: [['old', 'ddd']],
+    });
+
+    const merged = await detectMergedIntoOtherBranches('/fake/repo');
+
+    assert.deepStrictEqual(merged, ['feature-b']);
+  });
+
+  test('detectMergedIntoOtherBranches: does not flag a parent branch a fork descends from', async () => {
+    // feature-b (eee) was forked from feature-a (ccc) but never merged back.
+    // No merge commit references ccc, so feature-a must NOT be flagged.
+    stubMergedIntoOther({
+      tips: { main: 'aaa', 'feature-a': 'ccc', 'feature-b': 'eee' },
+      current: 'main',
+      mergeParents: [],
+    });
+
+    const merged = await detectMergedIntoOtherBranches('/fake/repo');
+
+    assert.deepStrictEqual(merged, []);
+  });
+
+  test('detectMergedIntoOtherBranches: ignores first parent (branch merged into)', async () => {
+    // feature-a (mmm) is the first parent of its own merge commit -> merged INTO,
+    // not merged. Only the second parent (feature-b) counts.
+    stubMergedIntoOther({
+      tips: { main: 'aaa', 'feature-a': 'mmm', 'feature-b': 'ddd' },
+      current: 'main',
+      mergeParents: [['mmm', 'ddd']],
+    });
+
+    const merged = await detectMergedIntoOtherBranches('/fake/repo');
+
+    assert.deepStrictEqual(merged, ['feature-b']);
+  });
+
+  test('detectMergedIntoOtherBranches: excludes current and protected branches', async () => {
+    // develop (protected) and main (current) are merge-in parents but must be skipped.
+    stubMergedIntoOther({
+      tips: { main: 'aaa', develop: 'bbb', feature: 'fff' },
+      current: 'main',
+      mergeParents: [['x', 'aaa'], ['y', 'bbb'], ['z', 'fff']],
+    });
+
+    const merged = await detectMergedIntoOtherBranches('/fake/repo');
+
+    assert.deepStrictEqual(merged, ['feature']);
+  });
+
+  test('detectMergedIntoOtherBranches: handles octopus merges (3+ parents)', async () => {
+    stubMergedIntoOther({
+      tips: { main: 'aaa', 'feature-x': 'xxx', 'feature-y': 'yyy' },
+      current: 'main',
+      mergeParents: [['old', 'xxx', 'yyy']],
+    });
+
+    const merged = await detectMergedIntoOtherBranches('/fake/repo');
+
+    assert.deepStrictEqual(merged.sort(), ['feature-x', 'feature-y']);
+  });
+
+  // ========================================
+  // getMergedBranchSet tests
+  // ========================================
+  test('getMergedBranchSet: returns only base-merged branches', async () => {
+    // First call: git branch --merged base
+    runGitStub.onFirstCall().resolves({ stdout: '  bugfix-1\n* main\n  develop\n' });
+    // Second call: getCurrentBranch
+    runGitStub.onSecondCall().resolves({ stdout: 'main\n' });
+
+    const merged = await getMergedBranchSet('/fake/repo', 'main');
+
+    // Only base merges; parent-merge detection is intentionally separate.
+    assert.strictEqual(merged.size, 1);
+    assert.ok(merged.has('bugfix-1'));
   });
 
   // ========================================
@@ -627,7 +741,7 @@ suite('Git functions (mocked)', () => {
     runGitStub.callsFake((_cwd: string, args: string[]) => {
       // listLocalBranches: for-each-ref --format FMT refs/heads
       if (args[0] === 'for-each-ref' && args[3] === 'refs/heads') {
-        // Check if it's for commit dates (has committerdate format)
+        // Commit dates (committerdate format)
         if (args[2].includes('committerdate')) {
           return Promise.resolve({
             stdout: [
@@ -635,6 +749,12 @@ suite('Git functions (mocked)', () => {
               `feature\t${fortyDaysAgo.toISOString()}`,
               `gone-branch\t${now.toISOString()}`,
             ].join('\n'),
+          });
+        }
+        // getLocalBranchTips: name + tip SHA
+        if (args[2].includes('objectname')) {
+          return Promise.resolve({
+            stdout: ['main\taaa', 'feature\tbbb', 'gone-branch\tccc'].join('\n'),
           });
         }
         // Regular branch listing
@@ -645,6 +765,10 @@ suite('Git functions (mocked)', () => {
             'refs/heads/gone-branch\tgone-branch\torigin/gone-branch\t\t',
           ].join('\n'),
         });
+      }
+      // getMergeParentCommits: log --merges
+      if (args[0] === 'log' && args.includes('--merges')) {
+        return Promise.resolve({ stdout: '' });
       }
       // detectDeadBranches: branch --merged
       if (args[0] === 'branch' && args[1] === '--merged') {
@@ -681,6 +805,8 @@ suite('Git functions (mocked)', () => {
     const feature = branches.find((b) => b.short === 'feature');
     assert.ok(feature);
     assert.strictEqual(feature.isMerged, true);
+    // base-merged branches are never also flagged as parent-merged
+    assert.strictEqual(feature.isMergedIntoParent, false);
     assert.strictEqual(feature.isStale, true);
     assert.strictEqual(feature.isGone, false);
 
@@ -688,6 +814,90 @@ suite('Git functions (mocked)', () => {
     const goneBranch = branches.find((b) => b.short === 'gone-branch');
     assert.ok(goneBranch);
     assert.strictEqual(goneBranch.isGone, true);
+  });
+
+  test('listLocalBranchesWithStatus: flags parent-merge as display-only, not isMerged', async () => {
+    const now = new Date();
+
+    runGitStub.callsFake((_cwd: string, args: string[]) => {
+      if (args[0] === 'for-each-ref' && args[3] === 'refs/heads') {
+        if (args[2].includes('committerdate')) {
+          return Promise.resolve({
+            stdout: [`main\t${now.toISOString()}`, `feature-b\t${now.toISOString()}`].join('\n'),
+          });
+        }
+        if (args[2].includes('objectname')) {
+          return Promise.resolve({ stdout: ['main\taaa', 'feature-b\tddd'].join('\n') });
+        }
+        return Promise.resolve({
+          stdout: ['refs/heads/main\tmain\torigin/main\t\t*', 'refs/heads/feature-b\tfeature-b\t\t\t'].join(
+            '\n'
+          ),
+        });
+      }
+      // feature-b (ddd) merged into a parent via merge commit, but NOT into base
+      if (args[0] === 'log' && args.includes('--merges')) {
+        return Promise.resolve({ stdout: 'old ddd' });
+      }
+      if (args[0] === 'branch' && args[1] === '--merged') {
+        return Promise.resolve({ stdout: '  main\n' });
+      }
+      if (args[0] === 'branch' && args[1] === '-vv') {
+        return Promise.resolve({ stdout: '* main abc [origin/main] c\n  feature-b def no upstream' });
+      }
+      if (args[0] === 'rev-parse') {
+        return Promise.resolve({ stdout: 'main\n' });
+      }
+      return Promise.resolve({ stdout: '' });
+    });
+
+    const branches = await listLocalBranchesWithStatus('/fake/repo', 'main', 30);
+
+    const featureB = branches.find((b) => b.short === 'feature-b');
+    assert.ok(featureB);
+    // Not a base merge -> excluded from cleanup candidates
+    assert.strictEqual(featureB.isMerged, false);
+    // But badged as parent-merged for display
+    assert.strictEqual(featureB.isMergedIntoParent, true);
+  });
+
+  test('listLocalBranchesWithStatus: detectParentMerges=false skips parent-merge detection', async () => {
+    const now = new Date();
+    let calledLog = false;
+
+    runGitStub.callsFake((_cwd: string, args: string[]) => {
+      if (args[0] === 'for-each-ref' && args[3] === 'refs/heads') {
+        if (args[2].includes('committerdate')) {
+          return Promise.resolve({ stdout: `feature-b\t${now.toISOString()}` });
+        }
+        if (args[2].includes('objectname')) {
+          return Promise.resolve({ stdout: 'feature-b\tddd' });
+        }
+        return Promise.resolve({ stdout: 'refs/heads/feature-b\tfeature-b\t\t\t' });
+      }
+      if (args[0] === 'log' && args.includes('--merges')) {
+        calledLog = true;
+        return Promise.resolve({ stdout: 'old ddd' });
+      }
+      if (args[0] === 'branch' && args[1] === '--merged') {
+        return Promise.resolve({ stdout: '' });
+      }
+      if (args[0] === 'branch' && args[1] === '-vv') {
+        return Promise.resolve({ stdout: '  feature-b def no upstream' });
+      }
+      if (args[0] === 'rev-parse') {
+        return Promise.resolve({ stdout: 'main\n' });
+      }
+      return Promise.resolve({ stdout: '' });
+    });
+
+    const branches = await listLocalBranchesWithStatus('/fake/repo', 'main', 30, false);
+
+    const featureB = branches.find((b) => b.short === 'feature-b');
+    assert.ok(featureB);
+    assert.strictEqual(featureB.isMergedIntoParent, false);
+    // The history walk must be skipped entirely when disabled.
+    assert.strictEqual(calledLog, false);
   });
 
   // ========================================
