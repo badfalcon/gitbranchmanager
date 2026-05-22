@@ -165,6 +165,8 @@ import {
   listRemoteBranches,
   getCurrentBranch,
   detectDeadBranches,
+  detectMergedIntoOtherBranches,
+  getMergedBranchSet,
   detectGoneBranches,
   detectStaleBranches,
   getBranchLastCommitDates,
@@ -296,6 +298,157 @@ suite('Git functions (mocked)', () => {
     // Should exclude: main (protected), feature/done (current), develop (protected)
     assert.strictEqual(dead.length, 1);
     assert.strictEqual(dead[0], 'bugfix-123');
+  });
+
+  // ========================================
+  // detectMergedIntoOtherBranches tests
+  // ========================================
+  type ContainsMap = Record<string, string[]>;
+
+  // Routes runGit calls for detectMergedIntoOtherBranches:
+  // - for-each-ref -> local branch list (tab-separated, like listLocalBranches)
+  // - rev-parse    -> current branch
+  // - branch -a --contains <name> -> full refnames containing that branch
+  function stubMergedIntoOther(opts: {
+    locals: { short: string; upstream?: string }[];
+    current: string;
+    contains: ContainsMap;
+  }) {
+    runGitStub.callsFake(async (_cwd: string, args: string[]) => {
+      if (args[0] === 'for-each-ref') {
+        const stdout = opts.locals
+          .map(
+            (b) =>
+              `refs/heads/${b.short}\t${b.short}\t${b.upstream ?? ''}\t\t${
+                b.short === opts.current ? '*' : ''
+              }`
+          )
+          .join('\n');
+        return { stdout };
+      }
+      if (args[0] === 'rev-parse') {
+        return { stdout: `${opts.current}\n` };
+      }
+      if (args[0] === 'branch' && args[1] === '-a' && args[2] === '--contains') {
+        const target = args[3];
+        return { stdout: (opts.contains[target] ?? []).join('\n') };
+      }
+      return { stdout: '' };
+    });
+  }
+
+  test('detectMergedIntoOtherBranches: detects branch merged into a local parent', async () => {
+    stubMergedIntoOther({
+      locals: [{ short: 'main', upstream: 'origin/main' }, { short: 'feature-a' }, { short: 'feature-b' }],
+      current: 'main',
+      contains: {
+        'feature-a': ['refs/heads/feature-a'],
+        // feature-b's tip is also contained in feature-a -> merged into parent
+        'feature-b': ['refs/heads/feature-b', 'refs/heads/feature-a'],
+      },
+    });
+
+    const merged = await detectMergedIntoOtherBranches('/fake/repo');
+
+    assert.deepStrictEqual(merged, ['feature-b']);
+  });
+
+  test('detectMergedIntoOtherBranches: ignores own same-named remote counterpart', async () => {
+    stubMergedIntoOther({
+      locals: [{ short: 'main', upstream: 'origin/main' }, { short: 'feature' }],
+      current: 'main',
+      contains: {
+        // only itself + its same-named remote -> just pushed, not "merged"
+        feature: ['refs/heads/feature', 'refs/remotes/origin/feature'],
+      },
+    });
+
+    const merged = await detectMergedIntoOtherBranches('/fake/repo');
+
+    assert.deepStrictEqual(merged, []);
+  });
+
+  test('detectMergedIntoOtherBranches: counts remote-tracking branch as a parent', async () => {
+    stubMergedIntoOther({
+      locals: [{ short: 'main', upstream: 'origin/main' }, { short: 'feature-x' }],
+      current: 'main',
+      contains: {
+        'feature-x': ['refs/heads/feature-x', 'refs/remotes/origin/main'],
+      },
+    });
+
+    const merged = await detectMergedIntoOtherBranches('/fake/repo');
+
+    assert.deepStrictEqual(merged, ['feature-x']);
+  });
+
+  test('detectMergedIntoOtherBranches: excludes current and protected branches', async () => {
+    stubMergedIntoOther({
+      locals: [{ short: 'main' }, { short: 'develop' }, { short: 'feature' }],
+      current: 'main',
+      contains: {
+        // even if reported as contained elsewhere, main(current)/develop(protected) are skipped
+        feature: ['refs/heads/feature'],
+        develop: ['refs/heads/develop', 'refs/heads/main'],
+      },
+    });
+
+    const merged = await detectMergedIntoOtherBranches('/fake/repo');
+
+    assert.deepStrictEqual(merged, []);
+  });
+
+  test('detectMergedIntoOtherBranches: normalizes slashed names and remote prefixes', async () => {
+    stubMergedIntoOther({
+      locals: [{ short: 'main', upstream: 'origin/main' }, { short: 'feature/login' }],
+      current: 'main',
+      contains: {
+        // self as local + self via remote (with a slash in the name) -> not merged
+        'feature/login': ['refs/heads/feature/login', 'refs/remotes/origin/feature/login'],
+      },
+    });
+
+    const merged = await detectMergedIntoOtherBranches('/fake/repo');
+
+    assert.deepStrictEqual(merged, []);
+  });
+
+  // ========================================
+  // getMergedBranchSet tests
+  // ========================================
+  test('getMergedBranchSet: unions base merges with parent merges', async () => {
+    runGitStub.callsFake(async (_cwd: string, args: string[]) => {
+      if (args[0] === 'branch' && args[1] === '--merged') {
+        return { stdout: '  bugfix-1\n* main\n  develop\n' };
+      }
+      if (args[0] === 'for-each-ref') {
+        return {
+          stdout: [
+            'refs/heads/main\tmain\torigin/main\t\t*',
+            'refs/heads/bugfix-1\tbugfix-1\t\t\t',
+            'refs/heads/feature-b\tfeature-b\t\t\t',
+          ].join('\n'),
+        };
+      }
+      if (args[0] === 'rev-parse') {
+        return { stdout: 'main\n' };
+      }
+      if (args[0] === 'branch' && args[1] === '-a' && args[2] === '--contains') {
+        const target = args[3];
+        if (target === 'feature-b') {
+          return { stdout: 'refs/heads/feature-b\nrefs/heads/feature-a' };
+        }
+        return { stdout: `refs/heads/${target}` };
+      }
+      return { stdout: '' };
+    });
+
+    const merged = await getMergedBranchSet('/fake/repo', 'main');
+
+    // bugfix-1 from base --merged, feature-b from parent containment
+    assert.strictEqual(merged.size, 2);
+    assert.ok(merged.has('bugfix-1'));
+    assert.ok(merged.has('feature-b'));
   });
 
   // ========================================

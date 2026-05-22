@@ -543,11 +543,79 @@ export async function detectGoneBranches(cwd: string): Promise<string[]> {
 }
 
 /**
+ * Extract the branch name from a full refname, dropping the local/remote prefix.
+ * - refs/heads/feature/login        -> "feature/login"
+ * - refs/remotes/origin/feature      -> "feature" (remote name has no '/')
+ * - refs/remotes/origin/HEAD or HEAD -> undefined (pointer, not a branch)
+ */
+function branchNameFromRefname(refname: string): string | undefined {
+  if (refname.startsWith('refs/heads/')) {
+    return refname.slice('refs/heads/'.length);
+  }
+  if (refname.startsWith('refs/remotes/')) {
+    const rest = refname.slice('refs/remotes/'.length);
+    const name = rest.split('/').slice(1).join('/');
+    return name === 'HEAD' ? undefined : name;
+  }
+  return undefined;
+}
+
+/**
+ * Detect local branches whose tip is contained in some other branch — i.e. they
+ * have been merged into a parent branch, even one that has not yet reached the
+ * base branch (e.g. a stacked `feature-b` merged into `feature-a`).
+ *
+ * Uses `git branch -a --contains <branch>` so both local and remote-tracking
+ * branches count as merge targets. A branch's own same-named remote counterpart
+ * (e.g. local `feature` vs `origin/feature`) is treated as the same branch and
+ * ignored, so merely pushing a branch does not mark it merged.
+ */
+export async function detectMergedIntoOtherBranches(cwd: string): Promise<string[]> {
+  const branches = await listLocalBranches(cwd);
+  const current = await getCurrentBranch(cwd);
+  const cfg = getCfg();
+
+  const results = await Promise.all(
+    branches.map(async (b) => {
+      if (b.short === current || isProtectedBranch(b.short, cfg.protected)) {
+        return undefined;
+      }
+      try {
+        const { stdout } = await runGit(cwd, [
+          'branch',
+          '-a',
+          '--contains',
+          b.short,
+          '--format',
+          '%(refname)',
+        ]);
+        const mergedIntoOther = stdout
+          .split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map(branchNameFromRefname)
+          .some((name) => name !== undefined && name !== b.short);
+        return mergedIntoOther ? b.short : undefined;
+      } catch {
+        return undefined;
+      }
+    })
+  );
+
+  return results.filter((n): n is string => !!n);
+}
+
+/**
  * Get Set of merged branch names (for efficient lookup).
+ * Union of branches merged into the base branch and branches merged into any
+ * other parent branch.
  */
 export async function getMergedBranchSet(cwd: string, base: string): Promise<Set<string>> {
-  const dead = await detectDeadBranches(cwd, base);
-  return new Set(dead);
+  const [dead, mergedIntoOther] = await Promise.all([
+    detectDeadBranches(cwd, base),
+    detectMergedIntoOtherBranches(cwd),
+  ]);
+  return new Set([...dead, ...mergedIntoOther]);
 }
 
 /**
