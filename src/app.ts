@@ -81,6 +81,7 @@ export type ExtensionConfig = {
   // New cleanup settings
   staleDays: number;
   autoFetchPrune: boolean;
+  detectParentMerges: boolean;
   showStatusBadges: boolean;
   allowRemoteBranchDeletion: boolean;
 };
@@ -96,6 +97,7 @@ export function getCfg(): ExtensionConfig {
     // New cleanup settings
     staleDays: cfg.get<number>('staleDays', 30),
     autoFetchPrune: cfg.get<boolean>('autoFetchPrune', false),
+    detectParentMerges: cfg.get<boolean>('detectParentMerges', true),
     showStatusBadges: cfg.get<boolean>('showStatusBadges', true),
     allowRemoteBranchDeletion: cfg.get<boolean>('allowRemoteBranchDeletion', false),
   };
@@ -670,12 +672,13 @@ export async function fetchWithPrune(cwd: string, remote = 'origin'): Promise<vo
 export async function listLocalBranchesWithStatus(
   cwd: string,
   baseBranch: string,
-  staleDays: number
+  staleDays: number,
+  detectParentMerges = true
 ): Promise<BranchRow[]> {
   const [branches, mergedSet, parentMergedList, datesMap, goneSet] = await Promise.all([
     listLocalBranches(cwd),
     getMergedBranchSet(cwd, baseBranch),
-    detectMergedIntoOtherBranches(cwd),
+    detectParentMerges ? detectMergedIntoOtherBranches(cwd) : Promise.resolve([]),
     getBranchLastCommitDates(cwd),
     getGoneBranchSet(cwd),
   ]);

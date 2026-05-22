@@ -861,6 +861,45 @@ suite('Git functions (mocked)', () => {
     assert.strictEqual(featureB.isMergedIntoParent, true);
   });
 
+  test('listLocalBranchesWithStatus: detectParentMerges=false skips parent-merge detection', async () => {
+    const now = new Date();
+    let calledLog = false;
+
+    runGitStub.callsFake((_cwd: string, args: string[]) => {
+      if (args[0] === 'for-each-ref' && args[3] === 'refs/heads') {
+        if (args[2].includes('committerdate')) {
+          return Promise.resolve({ stdout: `feature-b\t${now.toISOString()}` });
+        }
+        if (args[2].includes('objectname')) {
+          return Promise.resolve({ stdout: 'feature-b\tddd' });
+        }
+        return Promise.resolve({ stdout: 'refs/heads/feature-b\tfeature-b\t\t\t' });
+      }
+      if (args[0] === 'log' && args.includes('--merges')) {
+        calledLog = true;
+        return Promise.resolve({ stdout: 'old ddd' });
+      }
+      if (args[0] === 'branch' && args[1] === '--merged') {
+        return Promise.resolve({ stdout: '' });
+      }
+      if (args[0] === 'branch' && args[1] === '-vv') {
+        return Promise.resolve({ stdout: '  feature-b def no upstream' });
+      }
+      if (args[0] === 'rev-parse') {
+        return Promise.resolve({ stdout: 'main\n' });
+      }
+      return Promise.resolve({ stdout: '' });
+    });
+
+    const branches = await listLocalBranchesWithStatus('/fake/repo', 'main', 30, false);
+
+    const featureB = branches.find((b) => b.short === 'feature-b');
+    assert.ok(featureB);
+    assert.strictEqual(featureB.isMergedIntoParent, false);
+    // The history walk must be skipped entirely when disabled.
+    assert.strictEqual(calledLog, false);
+  });
+
   // ========================================
   // listRemoteBranchesWithStatus tests
   // ========================================

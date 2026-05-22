@@ -53,7 +53,7 @@ async function getState(repoRoot: string): Promise<State> {
 
   // Get locals and remotes with status information
   const [locals, remotes] = await Promise.all([
-    listLocalBranchesWithStatus(repoRoot, baseBranch, cfg.staleDays),
+    listLocalBranchesWithStatus(repoRoot, baseBranch, cfg.staleDays, cfg.detectParentMerges),
     listRemoteBranchesWithStatus(repoRoot, baseBranch, cfg.staleDays),
   ]);
 
