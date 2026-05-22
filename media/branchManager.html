@@ -11,11 +11,11 @@ body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); 
 .cleanup-toolbar .toolbar-label { font-weight: bold; font-size: 12px; }
 .table { width: 100%; border-collapse: collapse; margin-top: 8px; }
 .table th, .table td { border-bottom: 1px solid var(--vscode-editorGroup-border); padding: 6px 8px; font-size: 12px; text-align: left; }
-.badge { padding: 1px 6px; border-radius: 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); font-size: 10px; margin-right: 4px; display: inline-block; }
+.badge { padding: 1px 6px; border-radius: 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); font-size: 10px; margin-right: 4px; display: inline-block; white-space: nowrap; }
 .badge-merged { background: var(--vscode-testing-iconPassed, #4caf50); color: white; }
 .badge-stale { background: var(--vscode-editorWarning-foreground, #ff9800); color: white; }
 .badge-gone { background: var(--vscode-errorForeground, #f44336); color: white; }
-.status-badges { display: flex; gap: 2px; flex-wrap: wrap; }
+.status-badges { display: flex; gap: 2px; flex-wrap: nowrap; }
 .btn { padding: 2px 8px; border: 1px solid var(--vscode-button-border, transparent); background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); cursor: pointer; border-radius: 4px; font-size: 12px; }
 .btn.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
 .section { margin-top: 16px; }
