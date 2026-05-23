@@ -335,8 +335,7 @@ type WebviewI18n = {
   // Age display
   daysAgo: string;
 
-  // Select mode
-  selectMode: string;
+  // Branch selection
   selectedCount: string;
 
   // Search
@@ -413,8 +412,7 @@ function getWebviewI18n(): WebviewI18n {
     // Age display
     daysAgo: vscode.l10n.t('{0}d ago'),
 
-    // Select mode
-    selectMode: vscode.l10n.t('Select'),
+    // Branch selection
     selectedCount: vscode.l10n.t('{0} selected'),
 
     // Search

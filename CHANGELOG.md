@@ -4,6 +4,12 @@ All notable changes to the "gitsouji" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [Unreleased]
+
+### Changed
+
+- Branch selection checkboxes are now always shown; the "Select" mode toggle button has been removed. The "X selected" counter and "Add to Queue" button live permanently in the toolbar, and the selection is cleared after staging into the queue
+
 ## [1.4.2] - 2026-05-21
 
 ### Added

@@ -93,7 +93,7 @@ Main TypeScript module containing:
 - Tables for local and remote branches with status badges (merged/stale/gone)
 - **Local cleanup toolbar**: Merged/Stale/Gone/Cleanup All buttons
 - **Remote cleanup toolbar**: Merged/Stale/Cleanup All buttons (hidden when `allowRemoteBranchDeletion` is false)
-- **Select mode**: Toggle to show checkboxes for manual multi-select deletion. Each table header gets a **select-all checkbox** (`#selectAllLocal` / `#selectAllRemote`) that toggles all currently rendered (filtered) rows; `syncSelectAllState()` updates its tri-state (checked / indeterminate / unchecked) based on per-row selection
+- **Row selection**: checkboxes are always present on selectable rows for manual multi-select deletion (no mode toggle). Each table header gets a **select-all checkbox** (`#selectAllLocal` / `#selectAllRemote`) that toggles all currently rendered (filtered) rows; `syncSelectAllState()` updates its tri-state (checked / indeterminate / unchecked) based on per-row selection
 - **Preview modal**: Cleanup candidate preview with checkbox selection and "Add to Queue" button
 - **Toast**: Brief notification when items are added to the queue (queue itself lives in the SCM sidebar tree view)
 - i18n strings injected at runtime as base64-encoded JSON
@@ -154,7 +154,7 @@ Main TypeScript module containing:
 - Tree view lives in the SCM view container, hidden when empty via the `gitsouji.queueHasItems` context key
 - Users add branches to the queue via:
   - **Cleanup preview modal**: "Add to Queue" button adds checked branches (webview → extension via `addToQueue`)
-  - **Select mode**: "Delete Selected" adds selected branches to queue
+  - **Row selection**: "Add to Queue" adds the checked branches to the queue
 - Tree items show status icons (pending git-branch/cloud icon, spinning, ✓, ✗) and kind description
 - **View title actions**: Execute (play icon), Clear (clear-all icon)
 - **Inline item action**: Remove (✕) — only shown for pending items via `viewItem == queueItemPending`
@@ -164,12 +164,11 @@ Main TypeScript module containing:
 - Force-delete retry: if any local deletion fails (likely unmerged), user is prompted; failed items transition back to pending before retry
 - Single delete operations (per-row Delete button in the webview) bypass the queue and execute immediately
 
-### Select Mode
-- Toggle "Select" button to enter select mode
-- Checkboxes appear on selectable branch rows (hidden for current/protected branches)
+### Branch Selection
+- Selection checkboxes are always shown on selectable branch rows (hidden for current/protected branches); there is no mode toggle
 - Select branches from both local and remote tables simultaneously
 - Counter shows "X selected"
-- Click "Delete Selected" to add all selected branches to the deletion queue
+- Click "Add to Queue" to stage all selected branches into the deletion queue, after which the selection is cleared
 
 ### Configuration Keys
 All settings are under `gitSouji.*`, organized by category:

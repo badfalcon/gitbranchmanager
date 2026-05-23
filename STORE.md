@@ -18,12 +18,12 @@ A VS Code extension for cleaning up Git branches. "Souji" means "cleaning" in Ja
 
 ### Deletion Queue
 - Dedicated **Activity Bar view** for staging deletions
-- Stage branches from cleanup previews or Select Mode, review them, then execute the batch
+- Stage branches from cleanup previews or row selection, review them, then execute the batch
 - Per-item status icons (pending / spinning / ✓ / ✗) and inline remove action
 - View title actions: **Execute**, **Clear**, **Switch Repository**
 
-### Select Mode
-- Manually pick branches and add them to the Deletion Queue
+### Branch Selection
+- Selection checkboxes are always available — manually pick branches and add them to the Deletion Queue
 - Works for both local and remote branches simultaneously
 - Header **select-all checkbox** toggles all currently visible (filtered) rows — combine with search to bulk-select matching branches
 
