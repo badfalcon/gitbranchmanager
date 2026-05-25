@@ -43,8 +43,8 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
 .btn-icon.danger:hover { background: var(--vscode-toolbar-hoverBackground); }
 
 /* Preview Modal */
-.preview-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 99; display: none; }
-.preview-panel { position: fixed; top: 10%; left: 10%; right: 10%; bottom: 10%; background: var(--vscode-editor-background); border: 1px solid var(--vscode-editorGroup-border); border-radius: 4px; padding: 16px; overflow: auto; z-index: 100; display: none; box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+.preview-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 310; display: none; }
+.preview-panel { position: fixed; top: 10%; left: 10%; right: 10%; bottom: 10%; background: var(--vscode-editor-background); border: 1px solid var(--vscode-editorGroup-border); border-radius: 4px; padding: 16px; overflow: auto; z-index: 320; display: none; box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
 .preview-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--vscode-editorGroup-border); padding-bottom: 12px; }
 .preview-header h3 { margin: 0; }
 .preview-options { margin-bottom: 12px; }
@@ -73,7 +73,7 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
 .regex-toggle.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-focusBorder); }
 
 /* Queue toast */
-.queue-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); padding: 6px 16px; border-radius: 4px; font-size: 12px; z-index: 200; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+.queue-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); padding: 6px 16px; border-radius: 4px; font-size: 12px; z-index: 400; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
 .queue-toast.visible { opacity: 1; }
 
 /* Loading overlay */
@@ -145,10 +145,10 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
 
   <!-- Preview Modal -->
   <div class="preview-overlay" id="previewOverlay"></div>
-  <div class="preview-panel" id="previewPanel">
+  <div class="preview-panel" id="previewPanel" role="dialog" aria-modal="true" aria-labelledby="previewTitle" tabindex="-1">
     <div class="preview-header">
       <h3 id="previewTitle"></h3>
-      <button class="btn" id="previewClose">×</button>
+      <button class="btn" id="previewClose" aria-label="Close">×</button>
     </div>
     <div class="preview-options">
       <label>
@@ -229,6 +229,7 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
     $('includeRemoteLabel').textContent = I18N.queueIncludeRemote;
     $('previewCancel').textContent = I18N.previewCancel;
     $('previewExecute').textContent = I18N.previewAddToQueue;
+    $('previewClose').setAttribute('aria-label', I18N.previewCancel);
 
     // Search placeholders and tooltips
     $('searchInput').placeholder = I18N.searchPlaceholder;
@@ -258,6 +259,10 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
     $('previewOverlay').addEventListener('click', closePreview);
     $('previewCancel').addEventListener('click', closePreview);
     $('previewExecute').addEventListener('click', addPreviewToQueue);
+    // Close the modal with Escape while focus is inside it.
+    $('previewPanel').addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closePreview();
+    });
 
     // Search event listeners (unified)
     $('searchInput').addEventListener('input', (e) => {
@@ -423,6 +428,24 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       }
     }
 
+    // Make .sortable headers operable by keyboard and announce sort state to
+    // assistive tech, in addition to the click-to-sort behavior.
+    function wireSortableHeaders(root) {
+      root.querySelectorAll('.sortable').forEach(th => {
+        th.setAttribute('role', 'button');
+        th.setAttribute('tabindex', '0');
+        th.setAttribute('aria-sort',
+          th.classList.contains('sort-asc') ? 'ascending'
+          : th.classList.contains('sort-desc') ? 'descending'
+          : 'none');
+        const activate = () => toggleSort(th.dataset.table, th.dataset.sort);
+        th.addEventListener('click', activate);
+        th.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); }
+        });
+      });
+    }
+
     function render(state) {
       pruneSelection(state);
       repoEl.textContent = state.repoRoot;
@@ -458,11 +481,7 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
         + '<th class="' + authorClass + '" data-sort="author" data-table="local">' + escapeHtml(I18N.headerAuthor) + '</th>'
         + '<th>' + escapeHtml(I18N.localHeaderActions) + '</th></tr>';
       localEl.insertAdjacentHTML('beforeend', header);
-
-      // Add click listeners to sortable headers
-      localEl.querySelectorAll('.sortable').forEach(th => {
-        th.addEventListener('click', () => toggleSort(th.dataset.table, th.dataset.sort));
-      });
+      wireSortableHeaders(localEl);
 
       // Select-all in local table header
       const selectAllLocalEl = $('selectAllLocal');
@@ -570,11 +589,7 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
         + '<th class="' + authorClass + '" data-sort="author" data-table="remote">' + escapeHtml(I18N.headerAuthor) + '</th>'
         + '<th>' + escapeHtml(I18N.remoteHeaderActions) + '</th></tr>';
       remoteEl.insertAdjacentHTML('beforeend', header);
-
-      // Add click listeners to sortable headers
-      remoteEl.querySelectorAll('.sortable').forEach(th => {
-        th.addEventListener('click', () => toggleSort(th.dataset.table, th.dataset.sort));
-      });
+      wireSortableHeaders(remoteEl);
 
       // Select-all in remote table header
       const selectAllRemoteEl = $('selectAllRemote');
@@ -688,6 +703,8 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       renderPreview(previewCandidates);
       $('previewOverlay').style.display = 'block';
       $('previewPanel').style.display = 'block';
+      // Move focus into the dialog so keyboard users land there and Escape works.
+      $('previewPanel').focus();
     }
 
     function renderPreview(candidates) {
@@ -712,16 +729,12 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       const lastCommitClass = 'sortable' + (previewSort.column === 'lastCommit' ? ' sort-' + previewSort.direction : '');
 
       const allChecked = sortedCandidates.every(b => previewSelected.has(b.short));
-      const header = '<tr><th><input type="checkbox" id="selectAll"' + (allChecked ? ' checked' : '') + ' /></th>'
+      const header = '<tr><th><input type="checkbox" id="selectAll" aria-label="' + escapeHtml(I18N.previewSelectAll) + '"' + (allChecked ? ' checked' : '') + ' /></th>'
         + '<th class="' + nameClass + '" data-sort="name" data-table="preview">' + escapeHtml(I18N.localHeaderName) + '</th>'
         + '<th class="' + statusClass + '" data-sort="status" data-table="preview">' + escapeHtml(I18N.previewReasons) + '</th>'
         + '<th class="' + lastCommitClass + '" data-sort="lastCommit" data-table="preview">' + escapeHtml(I18N.localHeaderLastCommit) + '</th></tr>';
       table.insertAdjacentHTML('beforeend', header);
-
-      // Add click listeners to sortable headers
-      table.querySelectorAll('.sortable').forEach(th => {
-        th.addEventListener('click', () => toggleSort(th.dataset.table, th.dataset.sort));
-      });
+      wireSortableHeaders(table);
 
       $('selectAll').addEventListener('change', (e) => {
         const on = e.target.checked;

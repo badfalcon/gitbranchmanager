@@ -308,8 +308,9 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
         if (isProtectedBranch(rName, cfg.protected)) {
           continue;
         }
-        // Skip if already queued explicitly as remote
-        if (this.queue.some(q => q.kind === 'remote' && q.name === up)) {
+        // Skip if already queued explicitly as remote (ignore finished entries
+        // so a recreated remote can be re-queued).
+        if (this.queue.some(q => q.kind === 'remote' && q.name === up && q.status !== 'deleted')) {
           continue;
         }
         const newItem: DeletionQueueItem = { name: up, kind: 'remote', status: 'pending' };
@@ -320,7 +321,7 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
           continue;
         }
         const fullName = `origin/${local.name}`;
-        if (this.queue.some(q => q.kind === 'remote' && q.name === fullName)) {
+        if (this.queue.some(q => q.kind === 'remote' && q.name === fullName && q.status !== 'deleted')) {
           continue;
         }
         // Stage as untracked; add to queue only after user confirms

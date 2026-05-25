@@ -122,6 +122,15 @@ export async function openManagerPanel(
 
   queueProvider.setPostExecuteHook(refresh);
 
+  // Reflect setting changes (e.g. allowRemoteBranchDeletion, staleDays,
+  // showStatusBadges) in the open panel without requiring a manual refresh.
+  const configListener = vscode.workspace.onDidChangeConfiguration((e) => {
+    if (e.affectsConfiguration('gitSouji')) {
+      void refresh();
+    }
+  });
+  panel.onDidDispose(() => configListener.dispose(), undefined, context.subscriptions);
+
   // Serialize git-touching operations so a double-click (or an action fired
   // while a refresh is in flight) can't run two git commands concurrently and
   // race the resulting state messages.
@@ -302,10 +311,19 @@ export async function openManagerPanel(
   await refresh();
 }
 
+let logTerminal: vscode.Terminal | undefined;
+let logTerminalCwd: string | undefined;
+
 function openLogInTerminal(cwd: string, ref: string) {
-  const term = vscode.window.createTerminal({ cwd, name: vscode.l10n.t('Git Log') });
-  term.show();
-  term.sendText(`git log --oneline --graph --decorate -- ${JSON.stringify(ref)}`);
+  // Reuse one "Git Log" terminal instead of spawning a new one on every click.
+  if (!logTerminal || logTerminal.exitStatus !== undefined || logTerminalCwd !== cwd) {
+    logTerminal = vscode.window.createTerminal({ cwd, name: vscode.l10n.t('Git Log') });
+    logTerminalCwd = cwd;
+  }
+  logTerminal.show();
+  // The ref must come before `--`; `git log -- <ref>` would treat <ref> as a
+  // pathspec and show the wrong (usually empty) history.
+  logTerminal.sendText(`git log --oneline --graph --decorate ${JSON.stringify(ref)} --`);
 }
 
 type WebviewI18n = {

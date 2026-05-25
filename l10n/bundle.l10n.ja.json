@@ -26,12 +26,15 @@
 
   "Git Branch Cleaner activated": "Git Branch Cleaner が有効化されました",
   "No Git repository found. Open a folder or initialize Git.": "Git リポジトリが見つかりません。フォルダを開くか Git を初期化してください。",
+  "Git was not found on your PATH. Please install Git and reload the window.": "PATH に Git が見つかりません。Git をインストールしてウィンドウを再読み込みしてください。",
 
   "Please enter a branch name.": "ブランチ名を入力してください",
   "Whitespace is not allowed.": "空白は使用できません",
   "Contains invalid characters (~ ^ : \\ ? * [ ]).": "無効な文字を含みます (~ ^ : \\ ? * [ ])",
   "A branch name cannot end with '.' or '/'.": "末尾に . や / は使用できません",
   "'..' and consecutive '/' are not allowed.": "\"..\" や連続した \"/\" は使用できません",
+  "'@{' is not allowed in branch names.": "ブランチ名に \"@{\" は使用できません",
+  "A branch name cannot start with '-'.": "ブランチ名の先頭に \"-\" は使用できません",
 
   "Yes": "はい",
   "Select a Git repository": "Git リポジトリを選択",

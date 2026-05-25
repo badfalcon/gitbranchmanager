@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import {
+  isGitInstalled,
   isGitRepository,
   pickRepository,
   type DeletionQueueItem,
@@ -56,8 +57,11 @@ export async function activate(context: vscode.ExtensionContext) {
     try {
       const repo = await resolveRepo(forcePrompt);
       if (!repo) {
+        const gitOk = await isGitInstalled();
         vscode.window.showWarningMessage(
-          vscode.l10n.t('No Git repository found. Open a folder or initialize Git.')
+          gitOk
+            ? vscode.l10n.t('No Git repository found. Open a folder or initialize Git.')
+            : vscode.l10n.t('Git was not found on your PATH. Please install Git and reload the window.')
         );
         return;
       }

@@ -26,12 +26,15 @@
 
   "Git Branch Cleaner activated": "Git Branch Cleaner activated",
   "No Git repository found. Open a folder or initialize Git.": "No Git repository found. Open a folder or initialize Git.",
+  "Git was not found on your PATH. Please install Git and reload the window.": "Git was not found on your PATH. Please install Git and reload the window.",
 
   "Please enter a branch name.": "Please enter a branch name.",
   "Whitespace is not allowed.": "Whitespace is not allowed.",
   "Contains invalid characters (~ ^ : \\ ? * [ ]).": "Contains invalid characters (~ ^ : \\ ? * [ ]).",
   "A branch name cannot end with '.' or '/'.": "A branch name cannot end with '.' or '/'.",
   "'..' and consecutive '/' are not allowed.": "'..' and consecutive '/' are not allowed.",
+  "'@{' is not allowed in branch names.": "'@{' is not allowed in branch names.",
+  "A branch name cannot start with '-'.": "A branch name cannot start with '-'.",
 
   "Yes": "Yes",
   "Select a Git repository": "Select a Git repository",
