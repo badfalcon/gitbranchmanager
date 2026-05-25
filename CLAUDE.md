@@ -92,6 +92,7 @@ Main TypeScript module containing:
 - **Sortable columns**: Click headers to sort by Name, Status, Last Commit, or Author
 - **Author column**: Shows the last commit's author name (`%(authorname)`) for both local and remote branches; backed by `BranchRow.lastCommitAuthor` (populated by `getBranchLastCommitDates` / `getRemoteBranchLastCommitDates`). Rendered with ellipsis truncation + full-name tooltip; not included in the search filter or cleanup preview
 - Tables for local and remote branches with status badges (merged/stale/gone)
+- **Row action buttons**: Checkout / Log / Rename / Delete / Merge into current (local) and Checkout / Log / Delete Remote (remote) are rendered as **icon-only buttons** (`btn(label, onClick, iconKey, opts)` + the `ICONS` inline-SVG map; `.btn-icon` styling). The i18n label becomes the `title` / `aria-label`; Delete / Delete Remote use `{ danger: true }` (`.btn-icon.danger`). No codicon font / extra CSP — inline SVG only
 - **Local cleanup toolbar**: Merged/Stale/Gone/Cleanup All buttons
 - **Remote cleanup toolbar**: Merged/Stale/Cleanup All buttons (hidden when `allowRemoteBranchDeletion` is false)
 - **Row selection**: checkboxes are always present on selectable rows for manual multi-select deletion (no mode toggle). Each table header gets a **select-all checkbox** (`#selectAllLocal` / `#selectAllRemote`) that toggles all currently rendered (filtered) rows; `syncSelectAllState()` updates its tri-state (checked / indeterminate / unchecked) based on per-row selection

@@ -19,7 +19,7 @@ body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); 
 .btn { padding: 2px 8px; border: 1px solid var(--vscode-button-border, transparent); background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); cursor: pointer; border-radius: 4px; font-size: 12px; }
 .btn.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
 .section { margin-top: 16px; }
-.actions button { margin-right: 6px; }
+.actions { display: flex; gap: 6px; align-items: center; }
 code { font-family: var(--vscode-editor-font-family); }
 .last-commit { font-size: 11px; color: var(--vscode-descriptionForeground); white-space: nowrap; }
 .author-name { display: inline-block; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; font-size: 11px; color: var(--vscode-descriptionForeground); }
@@ -38,6 +38,9 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
 .toolbar-spacer { flex: 1; }
 .btn-icon { padding: 4px 6px; font-size: 16px; display: flex; align-items: center; justify-content: center; }
 .btn-icon svg { width: 16px; height: 16px; fill: currentColor; }
+.btn-icon:hover { background: var(--vscode-toolbar-hoverBackground); }
+.btn-icon.danger { background: transparent; color: var(--vscode-errorForeground); }
+.btn-icon.danger:hover { background: var(--vscode-toolbar-hoverBackground); }
 
 /* Preview Modal */
 .preview-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 99; display: none; }
@@ -475,13 +478,13 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
           + '<td class="author"><span class="author-name" title="' + escapeHtml(r.lastCommitAuthor || '') + '">' + escapeHtml(r.lastCommitAuthor || '') + '</span></td>'
           + '<td class="actions"></td>';
         const actions = tr.querySelector('.actions');
-        actions.appendChild(btn(I18N.actionCheckout, () => vscode.postMessage({ type: 'checkout', name: r.short })));
-        actions.appendChild(btn(I18N.actionLog, () => vscode.postMessage({ type: 'openLogTerminal', ref: r.short })));
+        actions.appendChild(btn(I18N.actionCheckout, () => vscode.postMessage({ type: 'checkout', name: r.short }), 'checkout'));
+        actions.appendChild(btn(I18N.actionLog, () => vscode.postMessage({ type: 'openLogTerminal', ref: r.short }), 'log'));
         if (!r.protected) {
-          actions.appendChild(btn(I18N.actionRename, () => vscode.postMessage({ type: 'rename', oldName: r.short })));
-          actions.appendChild(btn(I18N.actionDelete, () => vscode.postMessage({ type: 'deleteLocal', name: r.short })));
+          actions.appendChild(btn(I18N.actionRename, () => vscode.postMessage({ type: 'rename', oldName: r.short }), 'rename'));
+          actions.appendChild(btn(I18N.actionDelete, () => vscode.postMessage({ type: 'deleteLocal', name: r.short }), 'delete', { danger: true }));
           if (!r.isCurrent) {
-            actions.appendChild(btn(I18N.actionMergeIntoCurrent, () => vscode.postMessage({ type: 'mergeIntoCurrent', source: r.short })));
+            actions.appendChild(btn(I18N.actionMergeIntoCurrent, () => vscode.postMessage({ type: 'mergeIntoCurrent', source: r.short }), 'merge'));
           }
         }
         localEl.appendChild(tr);
@@ -579,10 +582,10 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
           + '<td class="author"><span class="author-name" title="' + escapeHtml(r.lastCommitAuthor || '') + '">' + escapeHtml(r.lastCommitAuthor || '') + '</span></td>'
           + '<td class="actions"></td>';
         const actions = tr.querySelector('.actions');
-        actions.appendChild(btn(I18N.actionCheckout, () => vscode.postMessage({ type: 'checkout', name: r.short })));
-        actions.appendChild(btn(I18N.actionLog, () => vscode.postMessage({ type: 'openLogTerminal', ref: r.short })));
+        actions.appendChild(btn(I18N.actionCheckout, () => vscode.postMessage({ type: 'checkout', name: r.short }), 'checkout'));
+        actions.appendChild(btn(I18N.actionLog, () => vscode.postMessage({ type: 'openLogTerminal', ref: r.short }), 'log'));
         if (!r.protected && allowRemoteDeletion) {
-          actions.appendChild(btn(I18N.actionDeleteRemote, () => vscode.postMessage({ type: 'deleteRemote', remote, name })));
+          actions.appendChild(btn(I18N.actionDeleteRemote, () => vscode.postMessage({ type: 'deleteRemote', remote, name }), 'deleteRemote', { danger: true }));
         }
         remoteEl.appendChild(tr);
       }
@@ -739,10 +742,24 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       closePreview();
     }
 
-    function btn(label, onClick) {
+    // Inline SVG icons (fill via CSS .btn-icon svg { fill: currentColor }).
+    // viewBox 0 0 24 24; scaled to 16px by CSS. Static strings only.
+    const ICONS = {
+      checkout: '<svg viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>',
+      log: '<svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>',
+      rename: '<svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>',
+      delete: '<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>',
+      merge: '<svg viewBox="0 0 24 24"><path d="M17 20.41L18.41 19 15 15.59 13.59 17 17 20.41zM7.5 8H11v5.59L5.59 19 7 20.41l6-6V8h3.5L12 3.5 7.5 8z"/></svg>',
+      deleteRemote: '<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>',
+    };
+
+    function btn(label, onClick, iconKey, opts) {
       const b = document.createElement('button');
-      b.className = 'btn';
-      b.textContent = label;
+      b.classList.add('btn', 'btn-icon');
+      if (opts && opts.danger) b.classList.add('danger');
+      b.innerHTML = ICONS[iconKey];
+      b.title = label;
+      b.setAttribute('aria-label', label);
       b.addEventListener('click', onClick);
       return b;
     }
