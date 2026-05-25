@@ -6,12 +6,15 @@ const execFileAsync = promisify(execFile);
 export class GitError extends Error {
   public readonly args: string[];
   public readonly cwd: string;
+  /** Underlying OS error code, e.g. 'ENOENT' when the git binary is missing. */
+  public readonly code?: string;
 
-  constructor(message: string, args: string[], cwd: string) {
+  constructor(message: string, args: string[], cwd: string, code?: string) {
     super(message);
     this.name = 'GitError';
     this.args = args;
     this.cwd = cwd;
+    this.code = code;
   }
 }
 
@@ -27,6 +30,6 @@ export async function runGit(cwd: string, args: string[]): Promise<{ stdout: str
   } catch (err: any) {
     const msg = err?.message ? String(err.message) : String(err);
     // Keep message compact but actionable
-    throw new GitError(`git ${args.join(' ')} failed: ${msg}`, args, cwd);
+    throw new GitError(`git ${args.join(' ')} failed: ${msg}`, args, cwd, err?.code);
   }
 }

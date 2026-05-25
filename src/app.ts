@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { runGit } from './git/gitRunner';
+import { GitError, runGit } from './git/gitRunner';
 
 // =====================
 // Types
@@ -90,14 +90,27 @@ export type ExtensionConfig = {
 
 export function getCfg(): ExtensionConfig {
   const cfg = vscode.workspace.getConfiguration('gitSouji');
+
+  // settings.json can be hand-edited past the package.json schema, so guard the
+  // values the rest of the code trusts: a non-array protected list would crash
+  // isProtectedBranch's for..of, and a 0/negative/NaN staleDays would mark every
+  // branch stale.
+  const protectedRaw = cfg.get<unknown>('protectedBranches', ['main', 'master', 'develop']);
+  const protectedList = Array.isArray(protectedRaw)
+    ? protectedRaw.filter((p): p is string => typeof p === 'string' && p.length > 0)
+    : ['main', 'master', 'develop'];
+
+  const staleDaysRaw = cfg.get<number>('staleDays', 30);
+  const staleDays = Number.isFinite(staleDaysRaw) ? Math.max(1, Math.floor(staleDaysRaw)) : 30;
+
   return {
     baseBranch: cfg.get<string>('baseBranch', 'auto'),
-    protected: cfg.get<string[]>('protectedBranches', ['main', 'master', 'develop']),
+    protected: protectedList,
     confirmBeforeDelete: cfg.get<boolean>('confirmBeforeDelete', true),
     forceDeleteLocal: cfg.get<boolean>('forceDeleteLocal', false),
     includeRemoteInDeadCleanup: cfg.get<boolean>('includeRemoteInDeadCleanup', false),
     // New cleanup settings
-    staleDays: cfg.get<number>('staleDays', 30),
+    staleDays,
     autoFetchPrune: cfg.get<boolean>('autoFetchPrune', false),
     detectParentMerges: cfg.get<boolean>('detectParentMerges', true),
     showStatusBadges: cfg.get<boolean>('showStatusBadges', true),
@@ -118,6 +131,10 @@ export function simpleBranchNameValidator(input?: string) {
   }
   if (/[~^:\\?*\[\]]/.test(input)) {
     return vscode.l10n.t('Contains invalid characters (~ ^ : \\ ? * [ ]).');
+  }
+  if (input.startsWith('-')) {
+    // A leading '-' would be parsed as a git option (e.g. "-D", "--track").
+    return vscode.l10n.t("A branch name cannot start with '-'.");
   }
   if (input.endsWith('.') || input.endsWith('/')) {
     return vscode.l10n.t("A branch name cannot end with '.' or '/'.");
@@ -143,6 +160,19 @@ export async function isGitRepository(folderPath: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+/** True if the `git` binary is available on PATH. Used to distinguish
+ * "no repository" from "git not installed" when surfacing errors. */
+export async function isGitInstalled(): Promise<boolean> {
+  const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+  try {
+    await runGit(cwd, ['--version']);
+    return true;
+  } catch (err) {
+    // ENOENT means the binary is missing; any other failure implies git ran.
+    return !(err instanceof GitError && err.code === 'ENOENT');
   }
 }
 
@@ -437,7 +467,14 @@ export async function checkoutBranch(cwd: string, name: string) {
   try {
     await runGit(cwd, ['show-ref', '--verify', `refs/remotes/${name}`]);
     const localName = name.split('/').slice(1).join('/');
-    await runGit(cwd, ['checkout', '-b', localName, '--track', name]);
+    // If a local branch with the stripped name already exists, switch to it
+    // rather than failing with "a branch named '<x>' already exists".
+    try {
+      await runGit(cwd, ['show-ref', '--verify', `refs/heads/${localName}`]);
+      await runGit(cwd, ['checkout', localName]);
+    } catch {
+      await runGit(cwd, ['checkout', '-b', localName, '--track', name]);
+    }
     return;
   } catch {
     // continue
@@ -463,11 +500,12 @@ export async function createBranch(cwd: string, name: string, base?: string, che
 }
 
 export async function renameBranch(cwd: string, oldName: string, newName: string) {
-  await runGit(cwd, ['branch', '-m', oldName, newName]);
+  // `--` guards against a branch name that begins with '-' being read as an option.
+  await runGit(cwd, ['branch', '-m', '--', oldName, newName]);
 }
 
 export async function deleteLocalBranch(cwd: string, name: string, force = false) {
-  await runGit(cwd, ['branch', force ? '-D' : '-d', name]);
+  await runGit(cwd, ['branch', force ? '-D' : '-d', '--', name]);
 }
 
 export async function mergeIntoCurrent(cwd: string, source: string) {
@@ -514,7 +552,15 @@ export async function resolveBaseBranch(cwd: string): Promise<string> {
 }
 
 export async function detectDeadBranches(cwd: string, base: string): Promise<string[]> {
-  const { stdout } = await runGit(cwd, ['branch', '--merged', base]);
+  let stdout: string;
+  try {
+    ({ stdout } = await runGit(cwd, ['branch', '--merged', base]));
+  } catch {
+    // Base may not resolve to a real commit yet (fresh repo / unborn HEAD),
+    // in which case there are simply no merged candidates. Degrade gracefully
+    // so a brand-new repository shows an empty list instead of an error.
+    return [];
+  }
   const current = await getCurrentBranch(cwd);
   const cfg = getCfg();
 
@@ -797,7 +843,13 @@ export async function getRemoteBranchLastCommitDates(
  * Detect remote branches merged into base branch.
  */
 export async function detectMergedRemoteBranches(cwd: string, base: string): Promise<Set<string>> {
-  const { stdout } = await runGit(cwd, ['branch', '-r', '--merged', base]);
+  let stdout: string;
+  try {
+    ({ stdout } = await runGit(cwd, ['branch', '-r', '--merged', base]));
+  } catch {
+    // Same as detectDeadBranches: an unresolved base means no candidates.
+    return new Set<string>();
+  }
 
   const merged = new Set<string>();
   for (const line of stdout.split(/\r?\n/).filter(Boolean)) {

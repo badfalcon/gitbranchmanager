@@ -207,8 +207,9 @@ suite('Unit functions', () => {
     assert.strictEqual(simpleBranchNameValidator('1'), undefined);
     // Numbers only
     assert.strictEqual(simpleBranchNameValidator('123'), undefined);
-    // Hyphen at start/end (valid in git)
-    assert.strictEqual(simpleBranchNameValidator('-feature'), undefined);
+    // Leading hyphen is rejected (would be parsed as a git option)
+    assert.ok(simpleBranchNameValidator('-feature'));
+    // Trailing hyphen is fine
     assert.strictEqual(simpleBranchNameValidator('feature-'), undefined);
     // Underscore
     assert.strictEqual(simpleBranchNameValidator('feature_branch'), undefined);
@@ -358,6 +359,15 @@ suite('Git functions (mocked)', () => {
     // Should exclude: main (protected), feature/done (current), develop (protected)
     assert.strictEqual(dead.length, 1);
     assert.strictEqual(dead[0], 'bugfix-123');
+  });
+
+  test('detectDeadBranches: returns [] when base does not resolve (fresh repo)', async () => {
+    // `git branch --merged <base>` fails on an unborn HEAD / missing base.
+    runGitStub.onFirstCall().rejects(new Error('fatal: malformed object name main'));
+
+    const dead = await detectDeadBranches('/fake/repo', 'main');
+
+    assert.deepStrictEqual(dead, []);
   });
 
   test('detectDeadBranches: strips worktree (+) marker and skips detached HEAD', async () => {
@@ -646,23 +656,44 @@ suite('Git functions (mocked)', () => {
   });
 
   test('checkoutBranch: checkout remote creates tracking branch', async () => {
-    // First call: show-ref --verify refs/heads/origin/feature (fails - no local)
-    runGitStub.onFirstCall().rejects(new Error('not found'));
-    // Second call: show-ref --verify refs/remotes/origin/feature (success)
-    runGitStub.onSecondCall().resolves({ stdout: 'abc123\n' });
-    // Third call: git checkout -b feature --track origin/feature
-    runGitStub.onThirdCall().resolves({ stdout: '' });
+    runGitStub.callsFake(async (_cwd: string, args: string[]) => {
+      if (args[0] === 'show-ref') {
+        // Remote ref exists; neither the full name nor the stripped local exist.
+        if (args[2] === 'refs/remotes/origin/feature') {
+          return { stdout: 'abc123\n' };
+        }
+        throw new Error('not found');
+      }
+      return { stdout: '' };
+    });
 
     await checkoutBranch('/fake/repo', 'origin/feature');
 
-    assert.ok(runGitStub.calledThrice);
-    assert.deepStrictEqual(runGitStub.thirdCall.args[1], [
+    assert.deepStrictEqual(runGitStub.lastCall.args[1], [
       'checkout',
       '-b',
       'feature',
       '--track',
       'origin/feature',
     ]);
+  });
+
+  test('checkoutBranch: remote ref with existing local switches to local (no -b)', async () => {
+    runGitStub.callsFake(async (_cwd: string, args: string[]) => {
+      if (args[0] === 'show-ref') {
+        // No "origin/feature" local, but the stripped local "feature" exists.
+        if (args[2] === 'refs/remotes/origin/feature' || args[2] === 'refs/heads/feature') {
+          return { stdout: 'abc123\n' };
+        }
+        throw new Error('not found');
+      }
+      return { stdout: '' };
+    });
+
+    await checkoutBranch('/fake/repo', 'origin/feature');
+
+    // Must switch to the existing local branch, not try to recreate it with -b.
+    assert.deepStrictEqual(runGitStub.lastCall.args[1], ['checkout', 'feature']);
   });
 
   // ========================================
@@ -701,7 +732,7 @@ suite('Git functions (mocked)', () => {
 
     await renameBranch('/fake/repo', 'old-name', 'new-name');
 
-    assert.deepStrictEqual(runGitStub.firstCall.args[1], ['branch', '-m', 'old-name', 'new-name']);
+    assert.deepStrictEqual(runGitStub.firstCall.args[1], ['branch', '-m', '--', 'old-name', 'new-name']);
   });
 
   // ========================================
@@ -712,7 +743,7 @@ suite('Git functions (mocked)', () => {
 
     await deleteLocalBranch('/fake/repo', 'feature-to-delete');
 
-    assert.deepStrictEqual(runGitStub.firstCall.args[1], ['branch', '-d', 'feature-to-delete']);
+    assert.deepStrictEqual(runGitStub.firstCall.args[1], ['branch', '-d', '--', 'feature-to-delete']);
   });
 
   test('deleteLocalBranch: force delete', async () => {
@@ -720,7 +751,7 @@ suite('Git functions (mocked)', () => {
 
     await deleteLocalBranch('/fake/repo', 'feature-to-delete', true);
 
-    assert.deepStrictEqual(runGitStub.firstCall.args[1], ['branch', '-D', 'feature-to-delete']);
+    assert.deepStrictEqual(runGitStub.firstCall.args[1], ['branch', '-D', '--', 'feature-to-delete']);
   });
 
   // ========================================
