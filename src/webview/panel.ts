@@ -303,6 +303,8 @@ type WebviewI18n = {
   remoteHeaderName: string;
   remoteHeaderActions: string;
 
+  headerAuthor: string;
+
   actionCheckout: string;
   actionLog: string;
   actionRename: string;
@@ -377,6 +379,8 @@ function getWebviewI18n(): WebviewI18n {
     remoteHeaderRemote: vscode.l10n.t('Remote'),
     remoteHeaderName: vscode.l10n.t('Name'),
     remoteHeaderActions: vscode.l10n.t('Actions'),
+
+    headerAuthor: vscode.l10n.t('Author'),
 
     actionCheckout: vscode.l10n.t('Checkout'),
     actionLog: vscode.l10n.t('Log'),

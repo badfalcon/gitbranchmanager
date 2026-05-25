@@ -89,7 +89,8 @@ Main TypeScript module containing:
 - **Sticky header**: Top toolbar, cleanup toolbar, and search bar are wrapped in `.sticky-header` with `position: sticky; top: 0;` so they stay pinned while scrolling (z-index `10`, below preview overlay/loading overlay/toast)
 - **Unified search bar**: Filter both local and remote branches with case sensitivity (Aa) and regex (.*) toggles
 - **Settings button**: Gear icon for quick access to extension settings
-- **Sortable columns**: Click headers to sort by Name, Status, or Last Commit
+- **Sortable columns**: Click headers to sort by Name, Status, Last Commit, or Author
+- **Author column**: Shows the last commit's author name (`%(authorname)`) for both local and remote branches; backed by `BranchRow.lastCommitAuthor` (populated by `getBranchLastCommitDates` / `getRemoteBranchLastCommitDates`). Rendered with ellipsis truncation + full-name tooltip; not included in the search filter or cleanup preview
 - Tables for local and remote branches with status badges (merged/stale/gone)
 - **Local cleanup toolbar**: Merged/Stale/Gone/Cleanup All buttons
 - **Remote cleanup toolbar**: Merged/Stale/Cleanup All buttons (hidden when `allowRemoteBranchDeletion` is false)

@@ -39,6 +39,8 @@ export type BranchRow = {
   lastCommitDate?: string;
   /** Calculated age in days for UI display */
   lastCommitAgeInDays?: number;
+  /** Author name of the last commit (%(authorname)) */
+  lastCommitAuthor?: string;
 };
 
 export type RepoContext = {
@@ -551,19 +553,19 @@ export async function getUpstreamMap(cwd: string): Promise<Map<string, string>> 
  */
 export async function getBranchLastCommitDates(
   cwd: string
-): Promise<Map<string, { date: string; ageInDays: number }>> {
-  const fmt = '%(refname:short)\t%(committerdate:iso-strict)';
+): Promise<Map<string, { date: string; ageInDays: number; author?: string }>> {
+  const fmt = '%(refname:short)\t%(committerdate:iso-strict)\t%(authorname)';
   const { stdout } = await runGit(cwd, ['for-each-ref', '--format', fmt, 'refs/heads']);
 
   const now = Date.now();
-  const result = new Map<string, { date: string; ageInDays: number }>();
+  const result = new Map<string, { date: string; ageInDays: number; author?: string }>();
 
   for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
-    const [name, dateStr] = line.split('\t');
+    const [name, dateStr, author] = line.split('\t');
     if (name && dateStr) {
       const commitDate = new Date(dateStr);
       const ageInDays = Math.floor((now - commitDate.getTime()) / (1000 * 60 * 60 * 24));
-      result.set(name, { date: dateStr, ageInDays });
+      result.set(name, { date: dateStr, ageInDays, author: author || undefined });
     }
   }
 
@@ -758,6 +760,7 @@ export async function listLocalBranchesWithStatus(
     if (dateInfo) {
       b.lastCommitDate = dateInfo.date;
       b.lastCommitAgeInDays = dateInfo.ageInDays;
+      b.lastCommitAuthor = dateInfo.author;
       b.isStale = dateInfo.ageInDays >= staleDays;
     }
   }
@@ -771,20 +774,20 @@ export async function listLocalBranchesWithStatus(
  */
 export async function getRemoteBranchLastCommitDates(
   cwd: string
-): Promise<Map<string, { date: string; ageInDays: number }>> {
-  const fmt = '%(refname:short)\t%(committerdate:iso-strict)';
+): Promise<Map<string, { date: string; ageInDays: number; author?: string }>> {
+  const fmt = '%(refname:short)\t%(committerdate:iso-strict)\t%(authorname)';
   const { stdout } = await runGit(cwd, ['for-each-ref', '--format', fmt, 'refs/remotes']);
 
   const now = Date.now();
-  const result = new Map<string, { date: string; ageInDays: number }>();
+  const result = new Map<string, { date: string; ageInDays: number; author?: string }>();
 
   for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
-    const [name, dateStr] = line.split('\t');
+    const [name, dateStr, author] = line.split('\t');
     // Skip HEAD pointers
     if (name && dateStr && !name.endsWith('/HEAD')) {
       const commitDate = new Date(dateStr);
       const ageInDays = Math.floor((now - commitDate.getTime()) / (1000 * 60 * 60 * 24));
-      result.set(name, { date: dateStr, ageInDays });
+      result.set(name, { date: dateStr, ageInDays, author: author || undefined });
     }
   }
 
@@ -833,6 +836,7 @@ export async function listRemoteBranchesWithStatus(
     if (dateInfo) {
       b.lastCommitDate = dateInfo.date;
       b.lastCommitAgeInDays = dateInfo.ageInDays;
+      b.lastCommitAuthor = dateInfo.author;
       b.isStale = dateInfo.ageInDays >= staleDays;
     }
   }

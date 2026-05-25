@@ -496,8 +496,8 @@ suite('Git functions (mocked)', () => {
 
     runGitStub.resolves({
       stdout: [
-        `main\t${now.toISOString()}`,
-        `old-branch\t${thirtyDaysAgo.toISOString()}`,
+        `main\t${now.toISOString()}\tAlice`,
+        `old-branch\t${thirtyDaysAgo.toISOString()}\tBob`,
       ].join('\n'),
     });
 
@@ -508,10 +508,12 @@ suite('Git functions (mocked)', () => {
     const mainInfo = dates.get('main');
     assert.ok(mainInfo);
     assert.ok(mainInfo.ageInDays <= 1);
+    assert.strictEqual(mainInfo.author, 'Alice');
 
     const oldInfo = dates.get('old-branch');
     assert.ok(oldInfo);
     assert.ok(oldInfo.ageInDays >= 29 && oldInfo.ageInDays <= 31);
+    assert.strictEqual(oldInfo.author, 'Bob');
   });
 
   // ========================================
@@ -522,9 +524,9 @@ suite('Git functions (mocked)', () => {
 
     runGitStub.resolves({
       stdout: [
-        `origin/main\t${now.toISOString()}`,
-        `origin/HEAD\t${now.toISOString()}`,
-        `origin/feature\t${now.toISOString()}`,
+        `origin/main\t${now.toISOString()}\tAlice`,
+        `origin/HEAD\t${now.toISOString()}\tAlice`,
+        `origin/feature\t${now.toISOString()}\tCarol`,
       ].join('\n'),
     });
 
@@ -535,6 +537,9 @@ suite('Git functions (mocked)', () => {
     assert.ok(dates.has('origin/main'));
     assert.ok(dates.has('origin/feature'));
     assert.ok(!dates.has('origin/HEAD'));
+    const featureInfo = dates.get('origin/feature');
+    assert.ok(featureInfo);
+    assert.strictEqual(featureInfo.author, 'Carol');
   });
 
   // ========================================
@@ -797,9 +802,9 @@ suite('Git functions (mocked)', () => {
         if (args[2].includes('committerdate')) {
           return Promise.resolve({
             stdout: [
-              `main\t${now.toISOString()}`,
-              `feature\t${fortyDaysAgo.toISOString()}`,
-              `gone-branch\t${now.toISOString()}`,
+              `main\t${now.toISOString()}\tAlice`,
+              `feature\t${fortyDaysAgo.toISOString()}\tBob`,
+              `gone-branch\t${now.toISOString()}\tCarol`,
             ].join('\n'),
           });
         }
@@ -861,6 +866,7 @@ suite('Git functions (mocked)', () => {
     assert.strictEqual(feature.isMergedIntoParent, false);
     assert.strictEqual(feature.isStale, true);
     assert.strictEqual(feature.isGone, false);
+    assert.strictEqual(feature.lastCommitAuthor, 'Bob');
 
     // gone-branch: gone upstream
     const goneBranch = branches.find((b) => b.short === 'gone-branch');
@@ -875,7 +881,7 @@ suite('Git functions (mocked)', () => {
       if (args[0] === 'for-each-ref' && args[3] === 'refs/heads') {
         if (args[2].includes('committerdate')) {
           return Promise.resolve({
-            stdout: [`main\t${now.toISOString()}`, `feature-b\t${now.toISOString()}`].join('\n'),
+            stdout: [`main\t${now.toISOString()}\tAlice`, `feature-b\t${now.toISOString()}\tBob`].join('\n'),
           });
         }
         if (args[2].includes('objectname')) {
@@ -920,7 +926,7 @@ suite('Git functions (mocked)', () => {
     runGitStub.callsFake((_cwd: string, args: string[]) => {
       if (args[0] === 'for-each-ref' && args[3] === 'refs/heads') {
         if (args[2].includes('committerdate')) {
-          return Promise.resolve({ stdout: `feature-b\t${now.toISOString()}` });
+          return Promise.resolve({ stdout: `feature-b\t${now.toISOString()}\tBob` });
         }
         if (args[2].includes('objectname')) {
           return Promise.resolve({ stdout: 'feature-b\tddd' });
@@ -966,9 +972,9 @@ suite('Git functions (mocked)', () => {
         if (args[2].includes('committerdate')) {
           return Promise.resolve({
             stdout: [
-              `origin/main\t${now.toISOString()}`,
-              `origin/feature\t${fortyDaysAgo.toISOString()}`,
-              `origin/recent\t${now.toISOString()}`,
+              `origin/main\t${now.toISOString()}\tAlice`,
+              `origin/feature\t${fortyDaysAgo.toISOString()}\tBob`,
+              `origin/recent\t${now.toISOString()}\tCarol`,
             ].join('\n'),
           });
         }
@@ -1007,6 +1013,7 @@ suite('Git functions (mocked)', () => {
     assert.ok(feature);
     assert.strictEqual(feature.isMerged, true);
     assert.strictEqual(feature.isStale, true);
+    assert.strictEqual(feature.lastCommitAuthor, 'Bob');
 
     // origin/recent: not merged, not stale
     const recent = branches.find((b) => b.short === 'origin/recent');
