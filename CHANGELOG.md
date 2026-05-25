@@ -1,3 +1,9 @@
+# [1.5.1] - 2026-05-25
+
+## Changed
+
+- Tidied up the changelog formatting so the Marketplace / extension Changelog tab no longer leads with the boilerplate template text
+
 # [1.5.0] - 2026-05-25
 
 ## Added
