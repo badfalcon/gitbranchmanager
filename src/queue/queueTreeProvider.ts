@@ -29,7 +29,14 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
   private onAfterExecute?: () => Promise<void> | void;
 
   setRepo(repo: RepoContext): void {
-    if (this.repo && this.repo.repoRoot !== repo.repoRoot && this.queue.length > 0) {
+    // Don't drop the queue mid-execution: runExecution mutates and reads
+    // this.queue, so replacing it with [] would corrupt an in-flight batch.
+    if (
+      !this.executing &&
+      this.repo &&
+      this.repo.repoRoot !== repo.repoRoot &&
+      this.queue.length > 0
+    ) {
       this.queue = [];
     }
     this.repo = repo;

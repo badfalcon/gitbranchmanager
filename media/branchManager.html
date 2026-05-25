@@ -184,6 +184,8 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
     let remoteSort = { column: 'name', direction: 'asc' };
     let previewSort = { column: 'name', direction: 'asc' };
     let previewCandidates = [];
+    // Branch shorts checked in the preview modal; survives in-modal re-sorts.
+    let previewSelected = new Set();
 
     // Search state (unified for both tables)
     let searchQuery = '';
@@ -404,7 +406,25 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
         && currentState.queued.some(q => q.name === name && q.kind === kind));
     }
 
+    // Drop selections for branches that no longer exist (deleted / renamed) or
+    // are no longer selectable, so the count and staging stay accurate.
+    function pruneSelection(state) {
+      const valid = new Set();
+      for (const r of state.locals) {
+        if (!r.isCurrent && !r.protected) valid.add(selKey(r.short, 'local'));
+      }
+      if (state.allowRemoteBranchDeletion) {
+        for (const r of state.remotes) {
+          if (!r.protected) valid.add(selKey(r.short, 'remote'));
+        }
+      }
+      for (const k of [...selectedKeys]) {
+        if (!valid.has(k)) selectedKeys.delete(k);
+      }
+    }
+
     function render(state) {
+      pruneSelection(state);
       repoEl.textContent = state.repoRoot;
       localEl.innerHTML = '';
       remoteEl.innerHTML = '';
@@ -658,8 +678,9 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
         return false;
       });
 
-      // Reset sort to default when opening preview
+      // Reset sort to default when opening preview; start with all candidates checked.
       previewSort = { column: 'name', direction: 'asc' };
+      previewSelected = new Set(previewCandidates.map(b => b.short));
 
       // Hide "include remote" option when cleaning remote branches
       $('includeRemote').parentElement.style.display = cleanupMode === 'remote' ? 'none' : '';
@@ -690,7 +711,8 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       const statusClass = 'sortable' + (previewSort.column === 'status' ? ' sort-' + previewSort.direction : '');
       const lastCommitClass = 'sortable' + (previewSort.column === 'lastCommit' ? ' sort-' + previewSort.direction : '');
 
-      const header = '<tr><th><input type="checkbox" id="selectAll" checked /></th>'
+      const allChecked = sortedCandidates.every(b => previewSelected.has(b.short));
+      const header = '<tr><th><input type="checkbox" id="selectAll"' + (allChecked ? ' checked' : '') + ' /></th>'
         + '<th class="' + nameClass + '" data-sort="name" data-table="preview">' + escapeHtml(I18N.localHeaderName) + '</th>'
         + '<th class="' + statusClass + '" data-sort="status" data-table="preview">' + escapeHtml(I18N.previewReasons) + '</th>'
         + '<th class="' + lastCommitClass + '" data-sort="lastCommit" data-table="preview">' + escapeHtml(I18N.localHeaderLastCommit) + '</th></tr>';
@@ -702,8 +724,12 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       });
 
       $('selectAll').addEventListener('change', (e) => {
-        const checkboxes = table.querySelectorAll('input[type="checkbox"][data-branch]');
-        checkboxes.forEach(cb => cb.checked = e.target.checked);
+        const on = e.target.checked;
+        table.querySelectorAll('input[type="checkbox"][data-branch]').forEach(cb => {
+          cb.checked = on;
+          if (on) previewSelected.add(cb.dataset.branch);
+          else previewSelected.delete(cb.dataset.branch);
+        });
       });
 
       for (const b of sortedCandidates) {
@@ -719,12 +745,27 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
           lastCommitHtml = escapeHtml(I18N.daysAgo.replace('{0}', b.lastCommitAgeInDays));
         }
 
-        tr.innerHTML = '<td><input type="checkbox" data-branch="' + escapeHtml(b.short) + '" checked /></td>'
+        tr.innerHTML = '<td><input type="checkbox" data-branch="' + escapeHtml(b.short) + '"' + (previewSelected.has(b.short) ? ' checked' : '') + ' /></td>'
           + '<td><code>' + escapeHtml(b.short) + '</code></td>'
           + '<td>' + reasons.join(' ') + '</td>'
           + '<td>' + lastCommitHtml + '</td>';
         table.appendChild(tr);
       }
+
+      // Track per-row checkbox changes so the selection survives a re-sort.
+      table.querySelectorAll('input[type="checkbox"][data-branch]').forEach(cb => {
+        cb.addEventListener('change', () => {
+          if (cb.checked) previewSelected.add(cb.dataset.branch);
+          else previewSelected.delete(cb.dataset.branch);
+          const sa = $('selectAll');
+          if (sa) {
+            const all = table.querySelectorAll('input[type="checkbox"][data-branch]').length;
+            const checked = table.querySelectorAll('input[type="checkbox"][data-branch]:checked').length;
+            sa.checked = checked === all;
+            sa.indeterminate = checked > 0 && checked < all;
+          }
+        });
+      });
     }
 
     // ==================
@@ -753,9 +794,9 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
     }
 
     function addPreviewToQueue() {
-      const table = $('previewTable');
-      const checkboxes = table.querySelectorAll('input[type="checkbox"][data-branch]:checked');
-      const branches = Array.from(checkboxes).map(cb => cb.dataset.branch);
+      const branches = previewCandidates
+        .filter(b => previewSelected.has(b.short))
+        .map(b => b.short);
 
       if (branches.length === 0) {
         closePreview();
@@ -793,14 +834,20 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
     }
 
     function updateSelectCount() {
+      // Count from the persisted selection so branches hidden by the current
+      // filter still count (and still get staged by "Add to Queue").
+      let total = 0;
+      for (const k of selectedKeys) {
+        if (k.startsWith('local:') || k.startsWith('remote:')) total++;
+      }
+      $('selectCount').textContent = I18N.selectedCount.replace('{0}', total);
+      $('deleteSelected').disabled = total === 0;
+
+      // The header select-all tri-state reflects the currently visible rows.
       const localBoxes = document.querySelectorAll('input[data-local]');
       const remoteBoxes = document.querySelectorAll('input[data-remote]');
       const localChecked = document.querySelectorAll('input[data-local]:checked').length;
       const remoteChecked = document.querySelectorAll('input[data-remote]:checked').length;
-      const total = localChecked + remoteChecked;
-      $('selectCount').textContent = I18N.selectedCount.replace('{0}', total);
-      $('deleteSelected').disabled = total === 0;
-
       syncSelectAllState($('selectAllLocal'), localBoxes.length, localChecked);
       syncSelectAllState($('selectAllRemote'), remoteBoxes.length, remoteChecked);
     }
@@ -823,8 +870,17 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
     }
 
     function deleteSelectedBranches() {
-      const localBranches = Array.from(document.querySelectorAll('input[data-local]:checked')).map(cb => cb.dataset.local);
-      const remoteBranches = Array.from(document.querySelectorAll('input[data-remote]:checked')).map(cb => cb.dataset.remote);
+      // Stage from the persisted selection, not just the rows visible under the
+      // current filter, so nothing is silently dropped.
+      const localBranches = [];
+      const remoteBranches = [];
+      for (const k of selectedKeys) {
+        const i = k.indexOf(':');
+        const kind = k.slice(0, i);
+        const name = k.slice(i + 1);
+        if (kind === 'local') localBranches.push(name);
+        else if (kind === 'remote') remoteBranches.push(name);
+      }
 
       if (localBranches.length === 0 && remoteBranches.length === 0) {
         return;

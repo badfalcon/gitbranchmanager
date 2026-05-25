@@ -42,6 +42,14 @@ suite('Unit functions', () => {
     assert.strictEqual(isProtectedBranch('main', ['Main']), false);
   });
 
+  test('isProtectedBranch: compound glob with trailing wildcard', () => {
+    // Interior `*` must stay a wildcard even when the pattern also ends with `*`.
+    assert.strictEqual(isProtectedBranch('feat/abc/temp123', ['feat/*/temp*']), true);
+    assert.strictEqual(isProtectedBranch('feat/abc/done', ['feat/*/temp*']), false);
+    // Leading wildcard
+    assert.strictEqual(isProtectedBranch('hotfix/urgent', ['*/urgent']), true);
+  });
+
   test('isProtectedBranch: special regex chars in pattern', () => {
     // Dots in pattern should be escaped (not treated as regex "any char")
     assert.strictEqual(isProtectedBranch('feature.test', ['feature.test']), true);
@@ -352,6 +360,22 @@ suite('Git functions (mocked)', () => {
     assert.strictEqual(dead[0], 'bugfix-123');
   });
 
+  test('detectDeadBranches: strips worktree (+) marker and skips detached HEAD', async () => {
+    runGitStub.onFirstCall().resolves({
+      // `+ wt-feature` is checked out in another worktree; the detached line and
+      // the protected `main` must be dropped, leaving clean branch names.
+      stdout: '* (HEAD detached at abc1234)\n  main\n+ wt-feature\n  bugfix-7\n',
+    });
+    runGitStub.onSecondCall().resolves({ stdout: '\n' });
+
+    const dead = await detectDeadBranches('/fake/repo', 'main');
+
+    assert.ok(!dead.some((n) => n.startsWith('+') || n.startsWith('(')), 'no markers/detached');
+    assert.ok(dead.includes('wt-feature'));
+    assert.ok(dead.includes('bugfix-7'));
+    assert.ok(!dead.includes('main'));
+  });
+
   // ========================================
   // detectMergedIntoOtherBranches tests
   // ========================================
@@ -485,6 +509,20 @@ suite('Git functions (mocked)', () => {
     assert.strictEqual(gone.length, 2);
     assert.ok(gone.includes('old-feature'));
     assert.ok(gone.includes('another'));
+  });
+
+  test('detectGoneBranches: detects gone branch checked out in another worktree (+)', async () => {
+    runGitStub.onFirstCall().resolves({
+      stdout: [
+        '* main        abc1234 [origin/main] latest',
+        '+ wt-feature  def5678 [origin/wt-feature: gone] old commit',
+      ].join('\n'),
+    });
+    runGitStub.onSecondCall().resolves({ stdout: 'main\n' });
+
+    const gone = await detectGoneBranches('/fake/repo');
+
+    assert.deepStrictEqual(gone, ['wt-feature']);
   });
 
   // ========================================
