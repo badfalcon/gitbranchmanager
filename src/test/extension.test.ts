@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as sinon from 'sinon';
 
-import { escapeHtml, isProtectedBranch, parseTrackShort, simpleBranchNameValidator } from '../app';
+import { classifyDeletionError, escapeHtml, isProtectedBranch, parseTrackShort, simpleBranchNameValidator } from '../app';
 import * as gitRunner from '../git/gitRunner';
 
 suite('Unit functions', () => {
@@ -67,6 +67,42 @@ suite('Unit functions', () => {
     assert.deepStrictEqual(parseTrackShort('+0 -0'), { ahead: 0, behind: 0 });
     assert.deepStrictEqual(parseTrackShort('+999'), { ahead: 999 });
     assert.deepStrictEqual(parseTrackShort('-999'), { behind: 999 });
+  });
+
+  // ========================================
+  // classifyDeletionError tests
+  // ========================================
+  test('classifyDeletionError: known git messages', () => {
+    assert.strictEqual(
+      classifyDeletionError("error: The branch 'feature' is not fully merged."),
+      'Not fully merged — enable force delete (-D) to remove it.'
+    );
+    assert.strictEqual(
+      classifyDeletionError("error: Cannot delete branch 'feature' checked out at '/repo'"),
+      'This branch is checked out and cannot be deleted.'
+    );
+    assert.strictEqual(
+      classifyDeletionError("error: unable to delete 'feature': remote ref does not exist"),
+      'The remote branch no longer exists.'
+    );
+    assert.strictEqual(
+      classifyDeletionError('! [remote rejected] feature (pre-receive hook declined)'),
+      'The remote rejected the deletion (protected branch or server hook).'
+    );
+    assert.strictEqual(
+      classifyDeletionError('fatal: Authentication failed for https://example.com/repo.git'),
+      'Could not reach the remote (authentication or permission error).'
+    );
+    assert.strictEqual(
+      classifyDeletionError("error: branch 'feature' not found."),
+      'Branch not found.'
+    );
+  });
+
+  test('classifyDeletionError: unknown / empty messages return undefined', () => {
+    assert.strictEqual(classifyDeletionError(undefined), undefined);
+    assert.strictEqual(classifyDeletionError(''), undefined);
+    assert.strictEqual(classifyDeletionError('some unexpected git failure'), undefined);
   });
 
   // ========================================

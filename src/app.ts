@@ -271,6 +271,54 @@ export function escapeHtml(s: unknown): string {
     .replace(/'/g, APOS);
 }
 
+/**
+ * Map a raw git branch-deletion error to a concise, human-friendly reason.
+ * Returns undefined when the message matches no known pattern, in which case
+ * the caller should fall back to showing the raw error.
+ */
+export function classifyDeletionError(message: string | undefined): string | undefined {
+  if (!message) {
+    return undefined;
+  }
+  const m = message.toLowerCase();
+
+  if (m.includes('not fully merged')) {
+    return vscode.l10n.t('Not fully merged — enable force delete (-D) to remove it.');
+  }
+  if (
+    m.includes('checked out') ||
+    m.includes('used by worktree') ||
+    (m.includes('cannot delete') && m.includes('currently'))
+  ) {
+    return vscode.l10n.t('This branch is checked out and cannot be deleted.');
+  }
+  if (
+    m.includes('remote ref does not exist') ||
+    (m.includes('unable to delete') && m.includes('remote'))
+  ) {
+    return vscode.l10n.t('The remote branch no longer exists.');
+  }
+  if (
+    m.includes('remote rejected') ||
+    m.includes('pre-receive hook declined') ||
+    m.includes('protected branch')
+  ) {
+    return vscode.l10n.t('The remote rejected the deletion (protected branch or server hook).');
+  }
+  if (
+    m.includes('authentication failed') ||
+    m.includes('could not read from remote') ||
+    m.includes('permission denied') ||
+    m.includes('access denied')
+  ) {
+    return vscode.l10n.t('Could not reach the remote (authentication or permission error).');
+  }
+  if (m.includes('not found') || m.includes("couldn't find remote ref")) {
+    return vscode.l10n.t('Branch not found.');
+  }
+  return undefined;
+}
+
 // =====================
 // Git queries
 // =====================

@@ -129,6 +129,12 @@
   "remote": "remote",
   "failed (hover for details)": "failed (hover for details)",
   "Deletion failed": "Deletion failed",
+  "Not fully merged — enable force delete (-D) to remove it.": "Not fully merged — enable force delete (-D) to remove it.",
+  "This branch is checked out and cannot be deleted.": "This branch is checked out and cannot be deleted.",
+  "The remote branch no longer exists.": "The remote branch no longer exists.",
+  "The remote rejected the deletion (protected branch or server hook).": "The remote rejected the deletion (protected branch or server hook).",
+  "Could not reach the remote (authentication or permission error).": "Could not reach the remote (authentication or permission error).",
+  "Branch not found.": "Branch not found.",
 
   "Deletion Queue": "Deletion Queue",
   "{0} branches added to queue": "{0} branches added to queue",

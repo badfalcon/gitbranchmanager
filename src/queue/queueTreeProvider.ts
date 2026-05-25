@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import {
+  classifyDeletionError,
   confirm,
   deleteLocalBranch,
   deleteRemoteBranch,
@@ -345,15 +346,19 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
     if (element.kind === 'local' && element.includeRemote) {
       desc += ' + ' + vscode.l10n.t('remote');
     }
+    const reason = element.status === 'failed'
+      ? classifyDeletionError(element.error)
+      : undefined;
+
     if (element.status === 'failed') {
-      desc += ' — ' + vscode.l10n.t('failed (hover for details)');
+      desc += ' — ' + (reason ?? vscode.l10n.t('failed (hover for details)'));
     }
     treeItem.description = desc;
 
     if (element.status === 'failed' && element.error) {
       const md = new vscode.MarkdownString();
       md.appendText(element.name);
-      md.appendMarkdown(`\n\n**${vscode.l10n.t('Deletion failed')}**\n\n`);
+      md.appendMarkdown(`\n\n**${reason ?? vscode.l10n.t('Deletion failed')}**\n\n`);
       md.appendCodeblock(element.error, 'text');
       treeItem.tooltip = md;
     } else {

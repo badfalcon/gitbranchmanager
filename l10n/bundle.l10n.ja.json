@@ -129,6 +129,12 @@
   "remote": "リモート",
   "failed (hover for details)": "失敗（ホバーで詳細）",
   "Deletion failed": "削除に失敗しました",
+  "Not fully merged — enable force delete (-D) to remove it.": "未マージです — 強制削除（-D）を有効にすると削除できます。",
+  "This branch is checked out and cannot be deleted.": "チェックアウト中のため削除できません。",
+  "The remote branch no longer exists.": "リモートブランチは既に存在しません。",
+  "The remote rejected the deletion (protected branch or server hook).": "リモート側が削除を拒否しました（保護ブランチまたはサーバーフック）。",
+  "Could not reach the remote (authentication or permission error).": "リモートに接続できませんでした（認証または権限エラー）。",
+  "Branch not found.": "ブランチが見つかりません。",
 
   "Deletion Queue": "削除キュー",
   "{0} branches added to queue": "{0} 件のブランチをキューに追加しました",
