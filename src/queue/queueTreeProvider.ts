@@ -43,8 +43,18 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
   add(items: QueueAddItem[]): number {
     let added = 0;
     for (const item of items) {
-      const exists = this.queue.some(q => q.name === item.name && q.kind === item.kind);
-      if (exists) {
+      const existing = this.queue.find(q => q.name === item.name && q.kind === item.kind);
+      if (existing) {
+        // Re-adding a finished entry (succeeded earlier, or failed) makes it
+        // actionable again instead of silently doing nothing — e.g. retrying a
+        // failed delete, or re-deleting a branch recreated under the same name.
+        // Active entries (pending/deleting) are left untouched.
+        if (existing.status === 'deleted' || existing.status === 'failed') {
+          existing.status = 'pending';
+          existing.error = undefined;
+          existing.includeRemote = !!item.includeRemote;
+          added++;
+        }
         continue;
       }
       this.queue.push({
@@ -82,9 +92,13 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
     return this.queue.some(q => q.status === 'pending');
   }
 
-  /** Branch name+kind pairs currently in the queue (for webview display). */
+  /** Branch name+kind pairs currently in the queue (for webview display).
+   * Excludes already-deleted entries so a branch recreated under the same name
+   * isn't shown as still-queued/checked. */
   getQueuedBranches(): { name: string; kind: 'local' | 'remote' }[] {
-    return this.queue.map(q => ({ name: q.name, kind: q.kind }));
+    return this.queue
+      .filter(q => q.status !== 'deleted')
+      .map(q => ({ name: q.name, kind: q.kind }));
   }
 
   async execute(): Promise<void> {
