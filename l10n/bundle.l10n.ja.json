@@ -127,6 +127,8 @@
   "{0} failed": "{0} 件失敗",
   "local": "ローカル",
   "remote": "リモート",
+  "failed (hover for details)": "失敗（ホバーで詳細）",
+  "Deletion failed": "削除に失敗しました",
 
   "Deletion Queue": "削除キュー",
   "{0} branches added to queue": "{0} 件のブランチをキューに追加しました",

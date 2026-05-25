@@ -127,6 +127,8 @@
   "{0} failed": "{0} failed",
   "local": "local",
   "remote": "remote",
+  "failed (hover for details)": "failed (hover for details)",
+  "Deletion failed": "Deletion failed",
 
   "Deletion Queue": "Deletion Queue",
   "{0} branches added to queue": "{0} branches added to queue",

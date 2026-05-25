@@ -345,14 +345,20 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
     if (element.kind === 'local' && element.includeRemote) {
       desc += ' + ' + vscode.l10n.t('remote');
     }
-    if (element.status === 'failed' && element.error) {
-      desc += ' — ' + element.error;
+    if (element.status === 'failed') {
+      desc += ' — ' + vscode.l10n.t('failed (hover for details)');
     }
     treeItem.description = desc;
 
-    treeItem.tooltip = element.error
-      ? `${element.name}\n${element.error}`
-      : element.name;
+    if (element.status === 'failed' && element.error) {
+      const md = new vscode.MarkdownString();
+      md.appendText(element.name);
+      md.appendMarkdown(`\n\n**${vscode.l10n.t('Deletion failed')}**\n\n`);
+      md.appendCodeblock(element.error, 'text');
+      treeItem.tooltip = md;
+    } else {
+      treeItem.tooltip = element.name;
+    }
 
     treeItem.contextValue = element.status === 'pending'
       ? 'queueItemPending'
