@@ -190,6 +190,17 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
     let useRegex = false;
     let caseSensitive = false;
 
+    // Manual selection persisted across re-renders (search / sort / refresh).
+    // Keyed "kind:name". Queued branches are tracked separately via isQueued();
+    // a checkbox is checked when either source says so.
+    const selectedKeys = new Set();
+    function selKey(name, kind) { return kind + ':' + name; }
+    function isSelected(name, kind) { return selectedKeys.has(selKey(name, kind)); }
+    function setSelected(name, kind, on) {
+      const k = selKey(name, kind);
+      if (on) selectedKeys.add(k); else selectedKeys.delete(k);
+    }
+
     // Static labels
     $('loadingText').textContent = I18N.loading;
     $('refresh').textContent = I18N.refresh;
@@ -438,7 +449,10 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       if (selectAllLocalEl) {
         selectAllLocalEl.addEventListener('change', (e) => {
           const checked = e.target.checked;
-          localEl.querySelectorAll('input[data-local]').forEach(cb => { cb.checked = checked; });
+          localEl.querySelectorAll('input[data-local]').forEach(cb => {
+            cb.checked = checked;
+            setSelected(cb.dataset.local, 'local', checked);
+          });
           updateSelectCount();
         });
         // Prevent the wrapping <label> click from also bubbling into row toggles
@@ -467,7 +481,7 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
         // Selection checkbox (hidden for current branch and protected)
         const canSelect = !r.isCurrent && !r.protected;
         const checkboxHtml = canSelect
-          ? '<td class="select-col"><label><input type="checkbox" data-local="' + escapeHtml(r.short) + '"' + (isQueued(r.short, 'local') ? ' checked' : '') + ' /></label></td>'
+          ? '<td class="select-col"><label><input type="checkbox" data-local="' + escapeHtml(r.short) + '"' + ((isQueued(r.short, 'local') || isSelected(r.short, 'local')) ? ' checked' : '') + ' /></label></td>'
           : '<td class="select-col"></td>';
 
         const tr = document.createElement('tr');
@@ -495,7 +509,10 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
 
       // Attach change listeners for selection checkboxes (CSP blocks inline onchange)
       localEl.querySelectorAll('input[data-local]').forEach(cb => {
-        cb.addEventListener('change', updateSelectCount);
+        cb.addEventListener('change', () => {
+          setSelected(cb.dataset.local, 'local', cb.checked);
+          updateSelectCount();
+        });
       });
       // Row click toggles checkbox (except in actions/select-col areas)
       localEl.querySelectorAll('tr').forEach(tr => {
@@ -506,6 +523,7 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
           if (e.target.closest('.actions')) return;
           if (e.target.closest('.select-col')) return;
           cb.checked = !cb.checked;
+          setSelected(cb.dataset.local, 'local', cb.checked);
           updateSelectCount();
         });
       });
@@ -543,7 +561,10 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       if (selectAllRemoteEl) {
         selectAllRemoteEl.addEventListener('change', (e) => {
           const checked = e.target.checked;
-          remoteEl.querySelectorAll('input[data-remote]').forEach(cb => { cb.checked = checked; });
+          remoteEl.querySelectorAll('input[data-remote]').forEach(cb => {
+            cb.checked = checked;
+            setSelected(cb.dataset.remote, 'remote', checked);
+          });
           updateSelectCount();
         });
         selectAllRemoteEl.parentElement.addEventListener('click', (e) => e.stopPropagation());
@@ -573,7 +594,7 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
         let checkboxHtml = '';
         if (allowRemoteDeletion) {
           checkboxHtml = canSelect
-            ? '<td class="select-col"><label><input type="checkbox" data-remote="' + escapeHtml(r.short) + '"' + (isQueued(r.short, 'remote') ? ' checked' : '') + ' /></label></td>'
+            ? '<td class="select-col"><label><input type="checkbox" data-remote="' + escapeHtml(r.short) + '"' + ((isQueued(r.short, 'remote') || isSelected(r.short, 'remote')) ? ' checked' : '') + ' /></label></td>'
             : '<td class="select-col"></td>';
         }
 
@@ -596,7 +617,10 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       // Attach change listeners for selection checkboxes (CSP blocks inline onchange)
       if (allowRemoteDeletion) {
         remoteEl.querySelectorAll('input[data-remote]').forEach(cb => {
-          cb.addEventListener('change', updateSelectCount);
+          cb.addEventListener('change', () => {
+            setSelected(cb.dataset.remote, 'remote', cb.checked);
+            updateSelectCount();
+          });
         });
         // Row click toggles checkbox (except in actions/select-col areas)
         remoteEl.querySelectorAll('tr').forEach(tr => {
@@ -607,6 +631,7 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
             if (e.target.closest('.actions')) return;
             if (e.target.closest('.select-col')) return;
             cb.checked = !cb.checked;
+            setSelected(cb.dataset.remote, 'remote', cb.checked);
             updateSelectCount();
           });
         });
@@ -810,8 +835,10 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
         ...remoteBranches.map(name => ({ name, kind: 'remote' })),
       ];
       sendToQueue(items);
-      // No manual clear: staged branches become queued, and the queueAdded
-      // re-render keeps them checked via isQueued() (single source of truth).
+      // Staged branches become queued: drop them from the manual-selection set
+      // so the queueAdded re-render keeps them checked via isQueued() instead.
+      for (const name of localBranches) setSelected(name, 'local', false);
+      for (const name of remoteBranches) setSelected(name, 'remote', false);
     }
 
     function escapeHtml(s) {
