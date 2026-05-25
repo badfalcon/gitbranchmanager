@@ -1,18 +1,18 @@
 {
-  "extension.displayName": "Git Souji",
+  "extension.displayName": "Git Sohji",
   "extension.description": "Git ブランチの整理に特化した VS Code 拡張です（デッド/古い/削除済みリモートのブランチ検出・削除、その他ブランチ管理機能）。",
 
-  "command.openCleaner.title": "Git Souji: 開く",
+  "command.openCleaner.title": "Git Sohji: 開く",
   "command.queue.execute.title": "削除キューを実行",
   "command.queue.clear.title": "削除キューをクリア",
   "command.queue.removeItem.title": "削除キューから除外",
   "command.switchRepository.title": "リポジトリ切替",
 
   "view.deletionQueue.name": "削除キュー",
-  "viewsContainers.gitsouji.title": "Git Souji",
-  "viewsWelcome.deletionQueue.empty": "削除待ちのブランチはありません。\n[Git Souji を開く](command:gitsouji.openCleaner)",
+  "viewsContainers.gitsouji.title": "Git Sohji",
+  "viewsWelcome.deletionQueue.empty": "削除待ちのブランチはありません。\n[Git Sohji を開く](command:gitsouji.openCleaner)",
 
-  "config.title": "Git Souji",
+  "config.title": "Git Sohji",
   "config.baseBranch.description": "デッドブランチ検出の基準ブランチ。「auto」の場合は origin/HEAD を優先し、無ければ main/master/develop を順に探索します。",
   "config.protectedBranches.description": "保護ブランチ。削除/検出/リネーム/マージ元指定の対象外になります。* を使用した glob パターンに対応しています。",
   "config.confirmBeforeDelete.description": "削除など破壊的操作前に確認ダイアログを表示します。",

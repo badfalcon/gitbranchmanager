@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Git Souji is a VS Code extension focused on cleaning up Git branches. "Souji" means "cleaning" in Japanese. It provides detection and deletion of dead/stale/gone branches for both local and remote, along with full branch management capabilities (checkout, create, rename, delete, merge) from a single webview panel.
+Git Sohji is a VS Code extension focused on cleaning up Git branches. "Sohji" means "cleaning" in Japanese. It provides detection and deletion of dead/stale/gone branches for both local and remote, along with full branch management capabilities (checkout, create, rename, delete, merge) from a single webview panel.
 
 ## Build, Test, and Develop Commands
 

@@ -93,7 +93,7 @@ export async function openManagerPanel(
 
   const panel = vscode.window.createWebviewPanel(
     'gitBranchCleaner',
-    'Git Souji',
+    'Git Sohji',
     vscode.ViewColumn.Active,
     {
       enableScripts: true,

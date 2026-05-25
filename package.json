@@ -24,7 +24,8 @@
     "stale",
     "scm",
     "source control",
-    "souji"
+    "souji",
+    "sohji"
   ],
   "engines": {
     "vscode": "^1.106.1"
@@ -46,25 +47,25 @@
       {
         "command": "gitsouji.queue.execute",
         "title": "%command.queue.execute.title%",
-        "category": "Git Souji",
+        "category": "Git Sohji",
         "icon": "$(play)"
       },
       {
         "command": "gitsouji.queue.clear",
         "title": "%command.queue.clear.title%",
-        "category": "Git Souji",
+        "category": "Git Sohji",
         "icon": "$(clear-all)"
       },
       {
         "command": "gitsouji.queue.removeItem",
         "title": "%command.queue.removeItem.title%",
-        "category": "Git Souji",
+        "category": "Git Sohji",
         "icon": "$(close)"
       },
       {
         "command": "gitsouji.switchRepository",
         "title": "%command.switchRepository.title%",
-        "category": "Git Souji",
+        "category": "Git Sohji",
         "icon": "$(repo)"
       }
     ],

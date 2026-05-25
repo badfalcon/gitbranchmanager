@@ -90,7 +90,7 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
     }
     if (!this.repo) {
       vscode.window.showWarningMessage(
-        vscode.l10n.t('Open Git Souji first to set the repository.')
+        vscode.l10n.t('Open Git Sohji first to set the repository.')
       );
       return;
     }
