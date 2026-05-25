@@ -122,9 +122,32 @@ export async function openManagerPanel(
 
   queueProvider.setPostExecuteHook(refresh);
 
+  // Serialize git-touching operations so a double-click (or an action fired
+  // while a refresh is in flight) can't run two git commands concurrently and
+  // race the resulting state messages.
+  const SERIALIZED: ReadonlySet<WebviewMessage['type']> = new Set([
+    'ready',
+    'refresh',
+    'checkout',
+    'create',
+    'rename',
+    'deleteLocal',
+    'mergeIntoCurrent',
+    'deleteRemote',
+  ]);
+  let busy = false;
+
   panel.webview.onDidReceiveMessage(
     async (raw: unknown) => {
       const msg = raw as WebviewMessage;
+
+      const guarded = SERIALIZED.has(msg.type);
+      if (guarded) {
+        if (busy) {
+          return;
+        }
+        busy = true;
+      }
 
       try {
         switch (msg.type) {
@@ -266,6 +289,10 @@ export async function openManagerPanel(
         }
       } catch (err: any) {
         vscode.window.showErrorMessage(err?.message ?? String(err));
+      } finally {
+        if (guarded) {
+          busy = false;
+        }
       }
     },
     undefined,

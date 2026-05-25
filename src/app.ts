@@ -197,14 +197,8 @@ function escapeRegExp(s: string) {
  */
 export function isProtectedBranch(name: string, protectedList: string[]): boolean {
   for (const p of protectedList) {
-    if (p.endsWith('*')) {
-      const prefix = p.slice(0, -1);
-      if (name.startsWith(prefix)) {
-        return true;
-      }
-      continue;
-    }
-
+    // Any `*` (leading, trailing, interior, or multiple) is treated as a glob
+    // wildcard. A lone trailing `*` reduces to a prefix match via `.*$`.
     if (p.includes('*')) {
       const re = new RegExp('^' + p.split('*').map(escapeRegExp).join('.*') + '$');
       if (re.test(name)) {
@@ -529,9 +523,13 @@ export async function detectDeadBranches(cwd: string, base: string): Promise<str
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const names = lines.map((l) => l.replace(/^\*\s+/, '')).map((n) => n.replace(/^\(no branch\)$/, ''));
+  const names = lines
+    // `+` marks a branch checked out in another worktree; `*` the current one.
+    .map((l) => l.replace(/^[*+]\s+/, ''))
+    // Drop "(no branch)" / "(HEAD detached at ...)" entries.
+    .filter((n) => !!n && !n.startsWith('('));
 
-  return names.filter((n) => !!n && n !== current && n !== base && !isProtectedBranch(n, cfg.protected));
+  return names.filter((n) => n !== current && n !== base && !isProtectedBranch(n, cfg.protected));
 }
 
 /**
@@ -601,7 +599,8 @@ export async function detectGoneBranches(cwd: string): Promise<string[]> {
 
   const gone: string[] = [];
   // Match patterns like: "  branch-name abc1234 [origin/branch-name: gone] commit message"
-  const goneRegex = /^\*?\s+(\S+)\s+\S+\s+\[[^\]]+:\s*gone\]/;
+  // Leading marker may be `*` (current) or `+` (checked out in another worktree).
+  const goneRegex = /^[*+]?\s+(\S+)\s+\S+\s+\[[^\]]+:\s*gone\]/;
 
   for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
     const match = line.match(goneRegex);
