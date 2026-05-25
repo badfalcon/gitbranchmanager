@@ -143,5 +143,7 @@
   "Open Git Sohji first to set the repository.": "先に Git Sohji を開いてリポジトリを設定してください。",
   "Deleting branches...": "ブランチを削除中...",
   "Invalid remote ref: {0}": "無効なリモート参照: {0}",
+  "Retrying...": "リトライ中...",
+  "Force delete {0}? Unmerged commits will be lost.": "{0} を強制削除しますか？未マージのコミットは失われます。",
   "Loading...": "読み込み中..."
 }

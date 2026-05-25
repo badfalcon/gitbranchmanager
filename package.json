@@ -63,6 +63,18 @@
         "icon": "$(close)"
       },
       {
+        "command": "gitsouji.queue.retry",
+        "title": "%command.queue.retry.title%",
+        "category": "Git Sohji",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "gitsouji.queue.forceRetry",
+        "title": "%command.queue.forceRetry.title%",
+        "category": "Git Sohji",
+        "icon": "$(debug-rerun)"
+      },
+      {
         "command": "gitsouji.switchRepository",
         "title": "%command.switchRepository.title%",
         "category": "Git Sohji",
@@ -192,8 +204,23 @@
       ],
       "view/item/context": [
         {
+          "command": "gitsouji.queue.retry",
+          "when": "view == gitsouji.deletionQueue && (viewItem == queueItemFailedLocal || (viewItem == queueItemFailedRemote && config.gitSouji.allowRemoteBranchDeletion)) && !gitsouji.queueExecuting",
+          "group": "1_retry@1"
+        },
+        {
+          "command": "gitsouji.queue.forceRetry",
+          "when": "view == gitsouji.deletionQueue && viewItem == queueItemFailedLocal && !gitsouji.queueExecuting",
+          "group": "1_retry@2"
+        },
+        {
           "command": "gitsouji.queue.removeItem",
-          "when": "view == gitsouji.deletionQueue && (viewItem == queueItemPending || viewItem == queueItemDone) && !gitsouji.queueExecuting",
+          "when": "view == gitsouji.deletionQueue && viewItem =~ /^queueItem(Pending|Deleted|Failed)/ && !gitsouji.queueExecuting",
+          "group": "2_remove"
+        },
+        {
+          "command": "gitsouji.queue.removeItem",
+          "when": "view == gitsouji.deletionQueue && viewItem =~ /^queueItem(Pending|Deleted|Failed)/ && !gitsouji.queueExecuting",
           "group": "inline"
         }
       ],
@@ -208,6 +235,14 @@
         },
         {
           "command": "gitsouji.queue.removeItem",
+          "when": "false"
+        },
+        {
+          "command": "gitsouji.queue.retry",
+          "when": "false"
+        },
+        {
+          "command": "gitsouji.queue.forceRetry",
           "when": "false"
         }
       ]

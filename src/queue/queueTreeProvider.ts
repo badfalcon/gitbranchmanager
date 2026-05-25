@@ -8,6 +8,7 @@ import {
   getCfg,
   getUpstreamMap,
   isProtectedBranch,
+  splitRemoteRef,
   type DeletionQueueItem,
   type RepoContext,
 } from '../app';
@@ -123,6 +124,90 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
           cancellable: false,
         },
         (progress) => this.runExecution(repo, cfg, progress)
+      );
+    } finally {
+      this.executing = false;
+      void vscode.commands.executeCommand('setContext', QUEUE_EXECUTING_CONTEXT, false);
+      this.fireChange();
+      if (this.onAfterExecute) {
+        try {
+          await this.onAfterExecute();
+        } catch {
+          // ignore refresh errors
+        }
+      }
+    }
+  }
+
+  async retryItem(item: DeletionQueueItem, force: boolean): Promise<void> {
+    if (this.executing) {
+      return;
+    }
+    if (!this.repo) {
+      vscode.window.showWarningMessage(
+        vscode.l10n.t('Open Git Sohji first to set the repository.')
+      );
+      return;
+    }
+    if (item.status !== 'failed' || !this.queue.includes(item)) {
+      return;
+    }
+
+    const cfg = getCfg();
+    if (item.kind === 'remote' && !cfg.allowRemoteBranchDeletion) {
+      return;
+    }
+
+    const willForce = item.kind === 'local' && (force || cfg.forceDeleteLocal);
+    if (willForce && cfg.confirmBeforeDelete) {
+      const ok = await confirm(
+        vscode.l10n.t('Force delete {0}? Unmerged commits will be lost.', item.name)
+      );
+      if (!ok) {
+        return;
+      }
+    }
+
+    const repo = this.repo;
+    this.executing = true;
+    void vscode.commands.executeCommand('setContext', QUEUE_EXECUTING_CONTEXT, true);
+
+    try {
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Window,
+          title: vscode.l10n.t('Retrying...'),
+          cancellable: false,
+        },
+        async (progress) => {
+          if (item.kind === 'local') {
+            await this.runDeletion(
+              item,
+              () => deleteLocalBranch(repo.repoRoot, item.name, force || cfg.forceDeleteLocal),
+              progress
+            );
+            return;
+          }
+          const parsed = splitRemoteRef(item.name);
+          if (!parsed) {
+            item.status = 'failed';
+            item.error = vscode.l10n.t('Invalid remote ref: {0}', item.name);
+            this.fireChange();
+            return;
+          }
+          const { remote, name } = parsed;
+          if (isProtectedBranch(name, cfg.protected)) {
+            item.status = 'failed';
+            item.error = vscode.l10n.t('Protected branches cannot be deleted remotely.');
+            this.fireChange();
+            return;
+          }
+          await this.runDeletion(
+            item,
+            () => deleteRemoteBranch(repo.repoRoot, remote, name),
+            progress
+          );
+        }
       );
     } finally {
       this.executing = false;
@@ -255,15 +340,14 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
     ];
 
     for (const explicit of pendingRemotes) {
-      const parts = explicit.name.split('/');
-      const remote = parts.shift();
-      const name = parts.join('/');
-      if (!remote || !name) {
+      const parsed = splitRemoteRef(explicit.name);
+      if (!parsed) {
         explicit.status = 'failed';
         explicit.error = vscode.l10n.t('Invalid remote ref: {0}', explicit.name);
         this.fireChange();
         continue;
       }
+      const { remote, name } = parsed;
       if (isProtectedBranch(name, cfg.protected)) {
         explicit.status = 'failed';
         explicit.error = vscode.l10n.t('Protected branches cannot be deleted remotely.');
@@ -368,9 +452,22 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
       treeItem.tooltip = element.name;
     }
 
-    treeItem.contextValue = element.status === 'pending'
-      ? 'queueItemPending'
-      : 'queueItemDone';
+    switch (element.status) {
+      case 'pending':
+        treeItem.contextValue = 'queueItemPending';
+        break;
+      case 'deleting':
+        treeItem.contextValue = 'queueItemDeleting';
+        break;
+      case 'deleted':
+        treeItem.contextValue = 'queueItemDeleted';
+        break;
+      case 'failed':
+        treeItem.contextValue = element.kind === 'local'
+          ? 'queueItemFailedLocal'
+          : 'queueItemFailedRemote';
+        break;
+    }
 
     return treeItem;
   }

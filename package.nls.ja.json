@@ -6,6 +6,8 @@
   "command.queue.execute.title": "削除キューを実行",
   "command.queue.clear.title": "削除キューをクリア",
   "command.queue.removeItem.title": "削除キューから除外",
+  "command.queue.retry.title": "削除をリトライ",
+  "command.queue.forceRetry.title": "強制リトライ (-D)",
   "command.switchRepository.title": "リポジトリ切替",
 
   "view.deletionQueue.name": "削除キュー",

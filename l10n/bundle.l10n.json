@@ -143,5 +143,7 @@
   "Open Git Sohji first to set the repository.": "Open Git Sohji first to set the repository.",
   "Deleting branches...": "Deleting branches...",
   "Invalid remote ref: {0}": "Invalid remote ref: {0}",
+  "Retrying...": "Retrying...",
+  "Force delete {0}? Unmerged commits will be lost.": "Force delete {0}? Unmerged commits will be lost.",
   "Loading...": "Loading..."
 }

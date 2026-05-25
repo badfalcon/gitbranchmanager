@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as sinon from 'sinon';
 
-import { classifyDeletionError, escapeHtml, isProtectedBranch, parseTrackShort, simpleBranchNameValidator } from '../app';
+import { classifyDeletionError, escapeHtml, isProtectedBranch, parseTrackShort, simpleBranchNameValidator, splitRemoteRef } from '../app';
 import * as gitRunner from '../git/gitRunner';
 
 suite('Unit functions', () => {
@@ -103,6 +103,22 @@ suite('Unit functions', () => {
     assert.strictEqual(classifyDeletionError(undefined), undefined);
     assert.strictEqual(classifyDeletionError(''), undefined);
     assert.strictEqual(classifyDeletionError('some unexpected git failure'), undefined);
+  });
+
+  // ========================================
+  // splitRemoteRef tests
+  // ========================================
+  test('splitRemoteRef: splits remote and branch name', () => {
+    assert.deepStrictEqual(splitRemoteRef('origin/feature'), { remote: 'origin', name: 'feature' });
+    assert.deepStrictEqual(splitRemoteRef('origin/feat/x'), { remote: 'origin', name: 'feat/x' });
+    assert.deepStrictEqual(splitRemoteRef('upstream/release/1.0'), { remote: 'upstream', name: 'release/1.0' });
+  });
+
+  test('splitRemoteRef: returns undefined for invalid refs', () => {
+    assert.strictEqual(splitRemoteRef('origin'), undefined);
+    assert.strictEqual(splitRemoteRef('feature'), undefined);
+    assert.strictEqual(splitRemoteRef('origin/'), undefined);
+    assert.strictEqual(splitRemoteRef(''), undefined);
   });
 
   // ========================================

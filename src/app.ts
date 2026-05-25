@@ -319,6 +319,21 @@ export function classifyDeletionError(message: string | undefined): string | und
   return undefined;
 }
 
+/**
+ * Split a remote ref short name (e.g. "origin/feature" or "origin/feat/x")
+ * into its remote and branch-name parts. Returns undefined when either part
+ * is empty (e.g. "origin", "feature", "origin/").
+ */
+export function splitRemoteRef(ref: string): { remote: string; name: string } | undefined {
+  const parts = ref.split('/');
+  const remote = parts.shift();
+  const name = parts.join('/');
+  if (!remote || !name) {
+    return undefined;
+  }
+  return { remote, name };
+}
+
 // =====================
 // Git queries
 // =====================

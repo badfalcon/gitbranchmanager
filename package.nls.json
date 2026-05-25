@@ -6,6 +6,8 @@
   "command.queue.execute.title": "Execute Deletion Queue",
   "command.queue.clear.title": "Clear Deletion Queue",
   "command.queue.removeItem.title": "Remove from Deletion Queue",
+  "command.queue.retry.title": "Retry Deletion",
+  "command.queue.forceRetry.title": "Force Retry (-D)",
   "command.switchRepository.title": "Switch Repository",
 
   "view.deletionQueue.name": "Deletion Queue",

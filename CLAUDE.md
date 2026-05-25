@@ -157,8 +157,9 @@ Main TypeScript module containing:
   - **Row selection**: "Add to Queue" adds the checked branches to the queue
 - Tree items show status icons (pending git-branch/cloud icon, spinning, ✓, ✗) and kind description
 - **View title actions**: Execute (play icon), Clear (clear-all icon)
-- **Inline item action**: Remove (✕) — only shown for pending items via `viewItem == queueItemPending`
-- Execution path: `gitsouji.queue.execute` command → provider's `execute()` → `withProgress` notification spans entire batch; per-item status updates fire `onDidChangeTreeData` for inline feedback
+- **Inline item action**: Remove (✕) — shown for any non-`deleting` item (pending/deleted/failed) while not executing
+- **Per-item context menu** (right-click): Retry (`gitsouji.queue.retry`) and Force Retry -D (`gitsouji.queue.forceRetry`, local only) on failed items, plus Remove. `getTreeItem()` sets a status×kind `contextValue` (`queueItemPending` / `queueItemDeleting` / `queueItemDeleted` / `queueItemFailedLocal` / `queueItemFailedRemote`) that the menu `when` clauses key off; all item actions are hidden while `gitsouji.queueExecuting` is true. Remote retry also requires `config.gitSouji.allowRemoteBranchDeletion`
+- Execution path: `gitsouji.queue.execute` command → provider's `execute()` → `withProgress` notification spans entire batch; per-item status updates fire `onDidChangeTreeData` for inline feedback. Single-item retry (`retryItem()`) reuses `runDeletion()` with a `ProgressLocation.Window` progress; force retry confirms first (data loss), normal retry runs the safe `-d` without confirmation
 - Each `DeletionQueueItem` tracks: `name`, `kind` (local/remote), optional `includeRemote` flag, `status` (pending/deleting/deleted/failed), optional `error`
 - `includeRemote` flag: local branches whose remote counterpart should also be deleted (upstream resolved at execution time); remote entries are added into the queue as separate tree items during execution
 - Force-delete retry: if any local deletion fails (likely unmerged), user is prompted; failed items transition back to pending before retry
@@ -215,7 +216,9 @@ Two-way message flow between extension and webview:
 **Extension-side commands (TreeView):**
 - `gitsouji.queue.execute` - run the deletion queue
 - `gitsouji.queue.clear` - clear the queue
-- `gitsouji.queue.removeItem` - remove a single item (inline action per TreeItem)
+- `gitsouji.queue.removeItem` - remove a single item (inline action + context menu)
+- `gitsouji.queue.retry` - retry a single failed item with normal delete (`retryItem(item, false)`)
+- `gitsouji.queue.forceRetry` - retry a single failed local item with force delete `-D` (`retryItem(item, true)`)
 
 ## Testing
 
