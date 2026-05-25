@@ -301,6 +301,9 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       } else if (msg.type === 'queueAdded') {
         if (currentState && msg.queued) {
           currentState.queued = msg.queued;
+          // Re-render so queued branches stay checked (isQueued) instead of
+          // appearing unchecked after deleteSelectedBranches() clears them.
+          render(currentState);
         }
         if (msg.count > 0) {
           showToast(I18N.queueAddedCount.replace('{0}', msg.count));
@@ -807,11 +810,8 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
         ...remoteBranches.map(name => ({ name, kind: 'remote' })),
       ];
       sendToQueue(items);
-
-      // Clear the current selection after staging
-      document.querySelectorAll('input[data-local]:checked, input[data-remote]:checked')
-        .forEach(cb => { cb.checked = false; });
-      updateSelectCount();
+      // No manual clear: staged branches become queued, and the queueAdded
+      // re-render keeps them checked via isQueued() (single source of truth).
     }
 
     function escapeHtml(s) {
