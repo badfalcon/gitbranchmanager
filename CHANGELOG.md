@@ -6,9 +6,25 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-05-25
+
+### Added
+
+- Parent-merge detection: branches merged into a non-base parent branch (e.g. a stacked feature merged into another feature) are now detected as merged via `git branch -a --contains` (requiring a merge commit). They are shown with a distinct "merged (parent)" badge and explanatory tooltip
+- `gitSouji.detectParentMerges` setting (default: true) to toggle parent-merge detection, since it runs an extra full-history walk on every refresh
+
 ### Changed
 
 - Branch selection checkboxes are now always shown; the "Select" mode toggle button has been removed. The "X selected" counter and "Add to Queue" button live permanently in the toolbar, and the selection is cleared after staging into the queue
+- Branches already staged in the deletion queue now appear pre-checked in the branch list (`getState` surfaces queue membership)
+
+### Fixed
+
+- Status badges no longer wrap in the narrow status column
+
+### Notes
+
+- Parent-merged branches are display-only and are deliberately excluded from the Merged / Cleanup-All candidates, because `git branch -d` refuses them (they are not merged into HEAD/base) — including them would trigger a misleading force-delete prompt
 
 ## [1.4.2] - 2026-05-21
 
