@@ -13,6 +13,7 @@ import {
 } from '../app';
 
 const QUEUE_HAS_ITEMS_CONTEXT = 'gitsouji.queueHasItems';
+const QUEUE_EXECUTING_CONTEXT = 'gitsouji.queueExecuting';
 const QUEUE_VIEW_FOCUS_COMMAND = 'gitsouji.deletionQueue.focus';
 
 type QueueAddItem = { name: string; kind: 'local' | 'remote'; includeRemote?: boolean };
@@ -111,6 +112,7 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
     }
 
     this.executing = true;
+    void vscode.commands.executeCommand('setContext', QUEUE_EXECUTING_CONTEXT, true);
     const repo = this.repo;
 
     try {
@@ -124,6 +126,7 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
       );
     } finally {
       this.executing = false;
+      void vscode.commands.executeCommand('setContext', QUEUE_EXECUTING_CONTEXT, false);
       this.fireChange();
       if (this.onAfterExecute) {
         try {

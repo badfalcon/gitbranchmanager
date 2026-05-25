@@ -193,7 +193,7 @@
       "view/item/context": [
         {
           "command": "gitsouji.queue.removeItem",
-          "when": "view == gitsouji.deletionQueue && viewItem == queueItemPending",
+          "when": "view == gitsouji.deletionQueue && (viewItem == queueItemPending || viewItem == queueItemDone) && !gitsouji.queueExecuting",
           "group": "inline"
         }
       ],
