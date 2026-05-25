@@ -138,7 +138,7 @@ export async function openManagerPanel(
             break;
 
           case 'openSettings':
-            await vscode.commands.executeCommand('workbench.action.openSettings', 'gitSouji');
+            await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:badfalcon.gitsouji');
             break;
 
           case 'checkout':
