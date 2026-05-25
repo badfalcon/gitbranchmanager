@@ -1,3 +1,18 @@
+# [1.6.0] - 2026-05-25
+
+## Added
+
+- **Author column**: the last commit's author name is shown (and is sortable) in both the local and remote branch tables, with ellipsis truncation and a full-name tooltip
+- **Deletion queue context menu**: right-click a queued item for Retry, Force Retry (`-D`, local branches), and Remove from queue
+- Completed and failed queue items can now be removed individually (✕), not just pending ones
+- Known deletion failures (not fully merged, checked out, remote rejected, authentication/permission, branch not found) are surfaced as concise, human-readable reasons in the queue item tooltip
+
+## Changed
+
+- Display name changed from "Git Souji" to "Git Sohji" to better match the Japanese pronunciation (internal command and setting IDs are unchanged)
+- Branch row actions (Checkout / Log / Rename / Delete / Merge into current, and Delete Remote) are now compact icon buttons with tooltips
+- The settings (gear) button now opens only this extension's settings instead of a free-text search that also matched other extensions
+
 # [1.5.1] - 2026-05-25
 
 ## Changed
