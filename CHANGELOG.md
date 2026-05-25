@@ -1,3 +1,28 @@
+# [1.6.1] - 2026-05-26
+
+## Fixed
+
+- Manual branch selection is now preserved across search, sort, and refresh. Bulk "Add to Queue" no longer drops branches hidden by the active filter, and the cleanup preview keeps your individual checkbox choices when you re-sort it
+- Branches checked out in another worktree are detected correctly (the `git branch` `+` marker is handled), so their merged / gone status is no longer missed
+- Protected-branch patterns with an interior wildcard (e.g. `feat/*/temp*`) now match as a glob instead of a literal prefix
+- A brand-new repository (no commits yet / unborn HEAD) shows an empty list instead of an error
+- The **Log** action now shows the selected branch's history; previously the branch name was treated as a file path and showed nothing
+- Re-adding an already-finished or failed branch to the deletion queue makes it actionable again instead of silently doing nothing
+- Checking out a remote branch when a local branch of the same name already exists now switches to the local branch instead of failing
+
+## Changed
+
+- The open panel now refreshes automatically when `gitSouji.*` settings change (e.g. toggling remote-branch deletion), instead of requiring a manual refresh
+- Branch names beginning with `-` are rejected, and `--` separators are passed to git so a leading dash can't be parsed as an option; `staleDays` and `protectedBranches` are validated against out-of-range / malformed values
+- A distinct message is shown when Git is not installed, separate from "no repository found"
+- Git operations are serialized so a double-click (or an action during a refresh) can't run two git commands at once
+- Toasts and the cleanup preview are no longer hidden behind the loading overlay (z-index fixes)
+
+## Accessibility
+
+- Sortable column headers are keyboard-operable (Enter / Space) and expose `aria-sort`
+- The cleanup preview is a proper dialog (`role="dialog"`, Escape to close, focus moved into it on open); the close button and select-all checkbox have accessible labels
+
 # [1.6.0] - 2026-05-25
 
 ## Added
