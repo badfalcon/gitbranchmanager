@@ -8,6 +8,8 @@
   "command.queue.removeItem.title": "Remove from Deletion Queue",
   "command.queue.retry.title": "Retry Deletion",
   "command.queue.forceRetry.title": "Force Retry (-D)",
+  "command.queue.switchAndRetry.title": "Switch & Delete",
+  "command.queue.pruneRetry.title": "Update Tracking Refs",
   "command.switchRepository.title": "Switch Repository",
 
   "view.deletionQueue.name": "Deletion Queue",

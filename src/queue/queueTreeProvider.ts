@@ -1,13 +1,18 @@
 import * as vscode from 'vscode';
 
 import {
-  classifyDeletionError,
+  checkoutBranch,
+  classifyDeletionCause,
   confirm,
   deleteLocalBranch,
   deleteRemoteBranch,
+  deletionCauseMessage,
+  fetchWithPrune,
   getCfg,
   getUpstreamMap,
   isProtectedBranch,
+  resolveBaseBranch,
+  resolveDeletionCause,
   splitRemoteRef,
   type DeletionQueueItem,
   type RepoContext,
@@ -59,6 +64,7 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
         if (existing.status === 'deleted' || existing.status === 'failed') {
           existing.status = 'pending';
           existing.error = undefined;
+          existing.errorCause = undefined;
           existing.includeRemote = !!item.includeRemote;
           added++;
         }
@@ -202,6 +208,13 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
         },
         async (progress) => {
           if (item.kind === 'local') {
+            if (isProtectedBranch(item.name, cfg.protected)) {
+              item.status = 'failed';
+              item.error = vscode.l10n.t('Protected branches cannot be deleted.');
+              item.errorCause = undefined;
+              this.fireChange();
+              return;
+            }
             await this.runDeletion(
               item,
               () => deleteLocalBranch(repo.repoRoot, item.name, force || cfg.forceDeleteLocal),
@@ -213,6 +226,7 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
           if (!parsed) {
             item.status = 'failed';
             item.error = vscode.l10n.t('Invalid remote ref: {0}', item.name);
+            item.errorCause = undefined;
             this.fireChange();
             return;
           }
@@ -220,6 +234,7 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
           if (isProtectedBranch(name, cfg.protected)) {
             item.status = 'failed';
             item.error = vscode.l10n.t('Protected branches cannot be deleted remotely.');
+            item.errorCause = undefined;
             this.fireChange();
             return;
           }
@@ -230,6 +245,152 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
           );
         }
       );
+    } finally {
+      this.executing = false;
+      void vscode.commands.executeCommand('setContext', QUEUE_EXECUTING_CONTEXT, false);
+      this.fireChange();
+      if (this.onAfterExecute) {
+        try {
+          await this.onAfterExecute();
+        } catch {
+          // ignore refresh errors
+        }
+      }
+    }
+  }
+
+  /**
+   * Recovery for a local item that failed because it is the current branch:
+   * switch to the base branch, then retry the deletion.
+   */
+  async switchAndRetryItem(item: DeletionQueueItem): Promise<void> {
+    if (this.executing) {
+      return;
+    }
+    if (!this.repo) {
+      vscode.window.showWarningMessage(
+        vscode.l10n.t('Open Git Sohji first to set the repository.')
+      );
+      return;
+    }
+    if (
+      item.status !== 'failed' ||
+      item.kind !== 'local' ||
+      item.errorCause !== 'checkedOutCurrent' ||
+      !this.queue.includes(item)
+    ) {
+      return;
+    }
+
+    const cfg = getCfg();
+    if (isProtectedBranch(item.name, cfg.protected)) {
+      vscode.window.showWarningMessage(vscode.l10n.t('Protected branches cannot be deleted.'));
+      return;
+    }
+
+    const repo = this.repo;
+    const base = await resolveBaseBranch(repo.repoRoot);
+    // resolveBaseBranch falls back to the current branch when no canonical
+    // base exists — which here IS the branch being deleted. Bail out instead
+    // of offering a nonsensical "switch to X and delete X".
+    if (base === item.name) {
+      vscode.window.showWarningMessage(
+        vscode.l10n.t('No other branch to switch to. Configure a base branch in settings.')
+      );
+      return;
+    }
+
+    // Always confirm regardless of confirmBeforeDelete: this changes the
+    // user's checked-out branch as a side effect, not just deletes one.
+    const ok = await confirm(vscode.l10n.t('Switch to {0} and delete {1}?', base, item.name));
+    if (!ok) {
+      return;
+    }
+
+    this.executing = true;
+    void vscode.commands.executeCommand('setContext', QUEUE_EXECUTING_CONTEXT, true);
+
+    try {
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Window,
+          title: vscode.l10n.t('Switching branch...'),
+          cancellable: false,
+        },
+        async (progress) => {
+          try {
+            await checkoutBranch(repo.repoRoot, base);
+          } catch (err) {
+            // e.g. dirty working tree; surface it instead of silently failing
+            vscode.window.showErrorMessage(err instanceof Error ? err.message : String(err));
+            return;
+          }
+          await this.runDeletion(
+            item,
+            () => deleteLocalBranch(repo.repoRoot, item.name, cfg.forceDeleteLocal),
+            progress
+          );
+        }
+      );
+    } finally {
+      this.executing = false;
+      void vscode.commands.executeCommand('setContext', QUEUE_EXECUTING_CONTEXT, false);
+      this.fireChange();
+      if (this.onAfterExecute) {
+        try {
+          await this.onAfterExecute();
+        } catch {
+          // ignore refresh errors
+        }
+      }
+    }
+  }
+
+  /**
+   * Recovery for a remote item that failed because the branch is already gone
+   * on the remote: run `fetch --prune` to drop the stale tracking ref. The
+   * item intentionally stays 'failed' — the deletion itself did not succeed.
+   */
+  async pruneRetryItem(item: DeletionQueueItem): Promise<void> {
+    if (this.executing) {
+      return;
+    }
+    if (!this.repo) {
+      vscode.window.showWarningMessage(
+        vscode.l10n.t('Open Git Sohji first to set the repository.')
+      );
+      return;
+    }
+    if (
+      item.status !== 'failed' ||
+      item.kind !== 'remote' ||
+      item.errorCause !== 'remoteGone' ||
+      !this.queue.includes(item)
+    ) {
+      return;
+    }
+
+    const repo = this.repo;
+    const remote = splitRemoteRef(item.name)?.remote ?? 'origin';
+    this.executing = true;
+    void vscode.commands.executeCommand('setContext', QUEUE_EXECUTING_CONTEXT, true);
+
+    try {
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Window,
+          title: vscode.l10n.t('Updating tracking refs...'),
+          cancellable: false,
+        },
+        async () => {
+          await fetchWithPrune(repo.repoRoot, remote);
+        }
+      );
+      vscode.window.showInformationMessage(
+        vscode.l10n.t('Tracking refs updated. {0} was already removed on the remote.', item.name)
+      );
+    } catch (err) {
+      vscode.window.showWarningMessage(err instanceof Error ? err.message : String(err));
     } finally {
       this.executing = false;
       void vscode.commands.executeCommand('setContext', QUEUE_EXECUTING_CONTEXT, false);
@@ -271,18 +432,22 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
       }
     }
 
-    // Offer force-delete for unmerged locals
-    if (failedLocals.length > 0 && !cfg.forceDeleteLocal) {
+    // Offer force-delete only for locals that actually failed as unmerged —
+    // other causes (checked out, locked ref, ...) would just fail again
+    // under -D and deserve their own classified message instead.
+    const unmergedFailedLocals = failedLocals.filter(i => i.errorCause === 'unmerged');
+    if (unmergedFailedLocals.length > 0 && !cfg.forceDeleteLocal) {
       const forceDelete = await confirm(
         vscode.l10n.t(
           '{0} branches are not fully merged. Force delete them?',
-          failedLocals.length
+          unmergedFailedLocals.length
         )
       );
       if (forceDelete) {
-        for (const item of failedLocals) {
+        for (const item of unmergedFailedLocals) {
           item.status = 'pending';
           item.error = undefined;
+          item.errorCause = undefined;
           this.fireChange();
           await this.runDeletion(
             item,
@@ -366,6 +531,7 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
       if (!parsed) {
         explicit.status = 'failed';
         explicit.error = vscode.l10n.t('Invalid remote ref: {0}', explicit.name);
+        explicit.errorCause = undefined;
         this.fireChange();
         continue;
       }
@@ -373,6 +539,7 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
       if (isProtectedBranch(name, cfg.protected)) {
         explicit.status = 'failed';
         explicit.error = vscode.l10n.t('Protected branches cannot be deleted remotely.');
+        explicit.errorCause = undefined;
         this.fireChange();
         continue;
       }
@@ -412,6 +579,7 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
   ): Promise<void> {
     item.status = 'deleting';
     item.error = undefined;
+    item.errorCause = undefined;
     this.fireChange();
     progress.report({ message: item.name });
     try {
@@ -420,7 +588,13 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
       this.fireChange();
     } catch (err) {
       item.status = 'failed';
-      item.error = err instanceof Error ? err.message : String(err);
+      const message = err instanceof Error ? err.message : String(err);
+      item.error = message;
+      // Local failures may need a rev-parse to tell "current branch" apart
+      // from "checked out in another worktree"; remote failures never do.
+      item.errorCause = item.kind === 'local' && this.repo
+        ? await resolveDeletionCause(this.repo.repoRoot, item.name, message)
+        : classifyDeletionCause(message);
       this.fireChange();
     }
   }
@@ -455,8 +629,8 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
     if (element.kind === 'local' && element.includeRemote) {
       desc += ' + ' + vscode.l10n.t('remote');
     }
-    const reason = element.status === 'failed'
-      ? classifyDeletionError(element.error)
+    const reason = element.status === 'failed' && element.errorCause
+      ? deletionCauseMessage(element.errorCause)
       : undefined;
 
     if (element.status === 'failed') {
@@ -484,11 +658,16 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
       case 'deleted':
         treeItem.contextValue = 'queueItemDeleted';
         break;
-      case 'failed':
-        treeItem.contextValue = element.kind === 'local'
+      case 'failed': {
+        // Cause-aware suffix lets package.json `when` clauses show only the
+        // recovery actions that fit this failure (forceRetry ⇒ :unmerged,
+        // switchAndRetry ⇒ :checkedOutCurrent, pruneRetry ⇒ :remoteGone).
+        const base = element.kind === 'local'
           ? 'queueItemFailedLocal'
           : 'queueItemFailedRemote';
+        treeItem.contextValue = `${base}:${element.errorCause ?? 'unknown'}`;
         break;
+      }
     }
 
     return treeItem;

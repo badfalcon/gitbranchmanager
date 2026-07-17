@@ -63,6 +63,7 @@ Main TypeScript module containing:
   - `parseTrackShort()` - parses git ahead/behind counts
   - `simpleBranchNameValidator()` - validates branch names with localized error messages
   - `escapeHtml()` - HTML entity escaping for safety
+  - **Deletion-failure classification**: `classifyDeletionCause()` maps a raw git error to a machine-readable `DeletionErrorCause` (`unmerged` / `checkedOut` / `refLocked` / `remoteGone` / `remoteRejected` / `networkUnreachable` / `authOrPermission` / `notFound`), stripping the echoed git command line first so branch names can't false-positive. `resolveDeletionCause()` refines the ambiguous `checkedOut` into `checkedOutCurrent` vs `checkedOutWorktree` via one extra `getCurrentBranch()` call. `deletionCauseMessage()` maps a cause to its localized display string; `classifyDeletionError()` is the backward-compatible string-only wrapper
 
 ### **Git Execution** ([src/git/gitRunner.ts](src/git/gitRunner.ts))
 - `runGit(cwd, args)` - executes git commands via `child_process.execFile`
@@ -142,9 +143,13 @@ Main TypeScript module containing:
 
 **Local branch deletion**:
 - Uses `git branch -d` by default (safe delete)
-- If deletion fails (unmerged branch), prompts: "X branches are not fully merged. Force delete them?"
-- If confirmed, retries with `git branch -D` (force delete)
+- If deletions fail **as unmerged** (classified via `errorCause === 'unmerged'`), prompts: "X branches are not fully merged. Force delete them?" — only those items are force-retried with `git branch -D`; failures with other causes keep their classified explanation
 - Reports any failures to user
+
+**Single-delete failure recovery** (per-row Delete button, [src/webview/panel.ts](src/webview/panel.ts)):
+- Failures are classified via `resolveDeletionCause()` / `classifyDeletionCause()` and handled by `handleLocalDeleteFailure()` / `handleRemoteDeleteFailure()`
+- `unmerged` → modal offers **Force Delete** (`-D`); `checkedOutCurrent` → modal offers **Switch & Delete** (checkout base branch, then delete; guarded when no other branch exists); `remoteGone` → modal offers **Update Tracking Refs** (`fetch --prune`); other causes show the classified message (or raw error if unclassified)
+- Prompts are `{ modal: true }` on purpose: they run while the panel's `busy` flag is held, and an unanswered non-modal toast would freeze the webview
 
 **Remote branch deletion** (when "Also delete corresponding remote branches" is checked):
 - For **tracked branches**: deletes directly using upstream ref
@@ -160,12 +165,12 @@ Main TypeScript module containing:
 - Tree items show status icons (pending git-branch/cloud icon, spinning, ✓, ✗) and kind description
 - **View title actions**: Execute (play icon), Clear (clear-all icon)
 - **Inline item action**: Remove (✕) — shown for any non-`deleting` item (pending/deleted/failed) while not executing
-- **Per-item context menu** (right-click): Retry (`gitsouji.queue.retry`) and Force Retry -D (`gitsouji.queue.forceRetry`, local only) on failed items, plus Remove. `getTreeItem()` sets a status×kind `contextValue` (`queueItemPending` / `queueItemDeleting` / `queueItemDeleted` / `queueItemFailedLocal` / `queueItemFailedRemote`) that the menu `when` clauses key off; all item actions are hidden while `gitsouji.queueExecuting` is true. Remote retry also requires `config.gitSouji.allowRemoteBranchDeletion`
-- Execution path: `gitsouji.queue.execute` command → provider's `execute()` → `withProgress` notification spans entire batch; per-item status updates fire `onDidChangeTreeData` for inline feedback. Single-item retry (`retryItem()`) reuses `runDeletion()` with a `ProgressLocation.Window` progress; force retry confirms first (data loss), normal retry runs the safe `-d` without confirmation
-- Each `DeletionQueueItem` tracks: `name`, `kind` (local/remote), optional `includeRemote` flag, `status` (pending/deleting/deleted/failed), optional `error`
+- **Per-item context menu** (right-click), cause-aware: Retry (`gitsouji.queue.retry`) on any failed item; Force Retry -D (`gitsouji.queue.forceRetry`) **only** on local items that failed as `unmerged`; Switch & Delete (`gitsouji.queue.switchAndRetry`) only on `checkedOutCurrent` local failures; Update Tracking Refs (`gitsouji.queue.pruneRetry`) only on `remoteGone` remote failures; plus Remove. `getTreeItem()` sets `contextValue` as `queueItemPending` / `queueItemDeleting` / `queueItemDeleted`, and for failures `queueItemFailedLocal:<cause|unknown>` / `queueItemFailedRemote:<cause|unknown>` — the menu `when` clauses match the suffix (regex for Retry/Remove, exact for the cause-specific actions); all item actions are hidden while `gitsouji.queueExecuting` is true. Remote retry/prune also require `config.gitSouji.allowRemoteBranchDeletion`
+- Execution path: `gitsouji.queue.execute` command → provider's `execute()` → `withProgress` notification spans entire batch; per-item status updates fire `onDidChangeTreeData` for inline feedback. Single-item retry (`retryItem()`) reuses `runDeletion()` with a `ProgressLocation.Window` progress; force retry confirms first (data loss), normal retry runs the safe `-d` without confirmation. `switchAndRetryItem()` guards against `resolveBaseBranch()` returning the branch itself, always confirms (it changes the checked-out branch), checks out the base, then retries the delete. `pruneRetryItem()` runs `fetch --prune` but leaves the item `failed` (the deletion itself never succeeded). Both new methods use the same executing-flag/`onAfterExecute` scaffolding as `retryItem()`
+- Each `DeletionQueueItem` tracks: `name`, `kind` (local/remote), optional `includeRemote` flag, `status` (pending/deleting/deleted/failed), optional `error`, optional `errorCause` (`DeletionErrorCause`, resolved in `runDeletion()`'s catch)
 - `includeRemote` flag: local branches whose remote counterpart should also be deleted (upstream resolved at execution time); remote entries are added into the queue as separate tree items during execution
-- Force-delete retry: if any local deletion fails (likely unmerged), user is prompted; failed items transition back to pending before retry
-- Single delete operations (per-row Delete button in the webview) bypass the queue and execute immediately
+- Force-delete retry: if local deletions fail as `unmerged`, user is prompted; those items transition back to pending before retry (other causes are excluded)
+- Single delete operations (per-row Delete button in the webview) bypass the queue and execute immediately, with their own cause-aware failure recovery (see Deletion Behavior)
 
 ### Branch Selection
 - Selection checkboxes are always shown on selectable branch rows (hidden for current/protected branches); there is no mode toggle
@@ -220,7 +225,9 @@ Two-way message flow between extension and webview:
 - `gitsouji.queue.clear` - clear the queue
 - `gitsouji.queue.removeItem` - remove a single item (inline action + context menu)
 - `gitsouji.queue.retry` - retry a single failed item with normal delete (`retryItem(item, false)`)
-- `gitsouji.queue.forceRetry` - retry a single failed local item with force delete `-D` (`retryItem(item, true)`)
+- `gitsouji.queue.forceRetry` - retry a single failed local item with force delete `-D` (`retryItem(item, true)`; shown only for `unmerged` failures)
+- `gitsouji.queue.switchAndRetry` - switch to the base branch, then retry deleting the current branch (`switchAndRetryItem(item)`; shown only for `checkedOutCurrent` failures)
+- `gitsouji.queue.pruneRetry` - run `fetch --prune` for a remote branch that no longer exists (`pruneRetryItem(item)`; shown only for `remoteGone` failures; item stays failed)
 
 ## Testing
 

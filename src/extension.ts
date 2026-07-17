@@ -102,6 +102,22 @@ export async function activate(context: vscode.ExtensionContext) {
         }
       }
     ),
+    vscode.commands.registerCommand(
+      'gitsouji.queue.switchAndRetry',
+      (item: DeletionQueueItem) => {
+        if (item) {
+          void queueProvider.switchAndRetryItem(item);
+        }
+      }
+    ),
+    vscode.commands.registerCommand(
+      'gitsouji.queue.pruneRetry',
+      (item: DeletionQueueItem) => {
+        if (item) {
+          void queueProvider.pruneRetryItem(item);
+        }
+      }
+    ),
   );
 }
 

@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as sinon from 'sinon';
 
-import { classifyDeletionError, escapeHtml, isProtectedBranch, parseTrackShort, simpleBranchNameValidator, splitRemoteRef } from '../app';
+import { classifyDeletionCause, classifyDeletionError, deletionCauseMessage, escapeHtml, isProtectedBranch, parseTrackShort, simpleBranchNameValidator, splitRemoteRef } from '../app';
 import * as gitRunner from '../git/gitRunner';
 
 suite('Unit functions', () => {
@@ -111,6 +111,158 @@ suite('Unit functions', () => {
     assert.strictEqual(classifyDeletionError(undefined), undefined);
     assert.strictEqual(classifyDeletionError(''), undefined);
     assert.strictEqual(classifyDeletionError('some unexpected git failure'), undefined);
+  });
+
+  // ========================================
+  // classifyDeletionCause tests
+  // ========================================
+  test('classifyDeletionCause: unmerged', () => {
+    assert.strictEqual(
+      classifyDeletionCause("error: The branch 'feature' is not fully merged."),
+      'unmerged'
+    );
+  });
+
+  test('classifyDeletionCause: checked out (both git phrasings, coarse only)', () => {
+    assert.strictEqual(
+      classifyDeletionCause("error: Cannot delete branch 'feature' checked out at '/repo'"),
+      'checkedOut'
+    );
+    assert.strictEqual(
+      classifyDeletionCause("error: cannot delete branch 'feature' used by worktree at '/wt'"),
+      'checkedOut'
+    );
+  });
+
+  test('classifyDeletionCause: refLocked', () => {
+    assert.strictEqual(
+      classifyDeletionCause('error: cannot lock ref refs/heads/feature: is at abc but expected def'),
+      'refLocked'
+    );
+    assert.strictEqual(
+      classifyDeletionCause("error: unable to create '.git/refs/heads/feature.lock': File exists."),
+      'refLocked'
+    );
+  });
+
+  test('classifyDeletionCause: remoteGone / remoteRejected', () => {
+    assert.strictEqual(
+      classifyDeletionCause("error: unable to delete 'feature': remote ref does not exist"),
+      'remoteGone'
+    );
+    assert.strictEqual(
+      classifyDeletionCause('! [remote rejected] feature (pre-receive hook declined)'),
+      'remoteRejected'
+    );
+    assert.strictEqual(
+      classifyDeletionCause('remote: error: cannot delete a protected branch'),
+      'remoteRejected'
+    );
+  });
+
+  test('classifyDeletionCause: networkUnreachable', () => {
+    assert.strictEqual(
+      classifyDeletionCause('ssh: Could not resolve hostname github.com: Name or service not known'),
+      'networkUnreachable'
+    );
+    assert.strictEqual(
+      classifyDeletionCause('fatal: unable to access https://example.com/: Connection timed out'),
+      'networkUnreachable'
+    );
+    assert.strictEqual(
+      classifyDeletionCause('fatal: unable to access https://example.com/: Failed to connect to example.com port 443'),
+      'networkUnreachable'
+    );
+  });
+
+  test('classifyDeletionCause: network patterns win over the generic remote-read wrapper', () => {
+    // Real SSH failures contain both the specific network line and the
+    // generic "could not read from remote repository" wrapper.
+    assert.strictEqual(
+      classifyDeletionCause(
+        'ssh: Could not resolve host: github.com\nfatal: Could not read from remote repository.'
+      ),
+      'networkUnreachable'
+    );
+  });
+
+  test('classifyDeletionCause: authOrPermission', () => {
+    assert.strictEqual(
+      classifyDeletionCause('fatal: Authentication failed for https://example.com/repo.git'),
+      'authOrPermission'
+    );
+    assert.strictEqual(
+      classifyDeletionCause('git@github.com: Permission denied (publickey).'),
+      'authOrPermission'
+    );
+    assert.strictEqual(
+      classifyDeletionCause('fatal: Could not read from remote repository.'),
+      'authOrPermission'
+    );
+    // Hosting services answer unauthorized access to private repos with a
+    // repo-level "not found" — that's a credentials problem, not a missing branch.
+    assert.strictEqual(
+      classifyDeletionCause("fatal: repository 'https://github.com/org/private.git/' not found"),
+      'authOrPermission'
+    );
+  });
+
+  test('classifyDeletionCause: notFound', () => {
+    assert.strictEqual(
+      classifyDeletionCause("error: branch 'feature' not found."),
+      'notFound'
+    );
+  });
+
+  test('classifyDeletionCause: unknown / empty messages return undefined', () => {
+    assert.strictEqual(classifyDeletionCause(undefined), undefined);
+    assert.strictEqual(classifyDeletionCause(''), undefined);
+    assert.strictEqual(classifyDeletionCause('some unexpected git failure'), undefined);
+  });
+
+  test('classifyDeletionCause: ignores the git command prefix (branch names cannot false-positive)', () => {
+    // GitError messages embed the argv; a branch named like a pattern must not
+    // match — only the stderr portion after "failed: " counts.
+    assert.strictEqual(
+      classifyDeletionCause('git branch -d -- fix/not-fully-merged-thing failed: some unexpected git failure'),
+      undefined
+    );
+    // ...while a real cause in the stderr portion still classifies, in the
+    // full runtime shape (our wrapper + Node's "Command failed:" echo).
+    assert.strictEqual(
+      classifyDeletionCause(
+        "git branch -d -- feature failed: Command failed: git branch -d -- feature\nerror: The branch 'feature' is not fully merged."
+      ),
+      'unmerged'
+    );
+    assert.strictEqual(
+      classifyDeletionCause(
+        'git branch -d -- fix/checked-out-thing failed: Command failed: git branch -d -- fix/checked-out-thing\nsome unexpected git failure'
+      ),
+      undefined
+    );
+  });
+
+  // ========================================
+  // deletionCauseMessage tests
+  // ========================================
+  test('deletionCauseMessage: causes only produced by resolveDeletionCause', () => {
+    assert.strictEqual(
+      deletionCauseMessage('checkedOutCurrent'),
+      'This is the current branch — switch away before deleting it.'
+    );
+    assert.strictEqual(
+      deletionCauseMessage('checkedOutWorktree'),
+      'This branch is checked out and cannot be deleted.'
+    );
+    assert.strictEqual(
+      deletionCauseMessage('refLocked'),
+      'Another Git process is holding a lock on this ref. Try again in a moment.'
+    );
+    assert.strictEqual(
+      deletionCauseMessage('networkUnreachable'),
+      'Could not connect to the remote — check your network connection.'
+    );
   });
 
   // ========================================
@@ -241,6 +393,7 @@ import {
   mergeIntoCurrent,
   fetchWithPrune,
   resolveBaseBranch,
+  resolveDeletionCause,
   getUpstreamMap,
   listLocalBranchesWithStatus,
   listRemoteBranchesWithStatus,
@@ -768,6 +921,58 @@ suite('Git functions (mocked)', () => {
       '--delete',
       'feature-to-delete',
     ]);
+  });
+
+  // ========================================
+  // resolveDeletionCause tests
+  // ========================================
+  test('resolveDeletionCause: checked out + same branch is current → checkedOutCurrent', async () => {
+    runGitStub.resolves({ stdout: 'feature\n' });
+
+    const cause = await resolveDeletionCause(
+      '/fake/repo',
+      'feature',
+      "error: Cannot delete branch 'feature' checked out at '/repo'"
+    );
+
+    assert.strictEqual(cause, 'checkedOutCurrent');
+    assert.deepStrictEqual(runGitStub.firstCall.args[1], ['rev-parse', '--abbrev-ref', 'HEAD']);
+  });
+
+  test('resolveDeletionCause: checked out elsewhere → checkedOutWorktree', async () => {
+    runGitStub.resolves({ stdout: 'main\n' });
+
+    const cause = await resolveDeletionCause(
+      '/fake/repo',
+      'feature',
+      "error: cannot delete branch 'feature' used by worktree at '/wt'"
+    );
+
+    assert.strictEqual(cause, 'checkedOutWorktree');
+  });
+
+  test('resolveDeletionCause: rev-parse failure (detached HEAD) falls back to checkedOutWorktree', async () => {
+    // getCurrentBranch swallows the rejection and returns undefined
+    runGitStub.rejects(new Error('fatal: something went wrong'));
+
+    const cause = await resolveDeletionCause(
+      '/fake/repo',
+      'feature',
+      "error: Cannot delete branch 'feature' checked out at '/repo'"
+    );
+
+    assert.strictEqual(cause, 'checkedOutWorktree');
+  });
+
+  test('resolveDeletionCause: non-checkedOut causes short-circuit without a git call', async () => {
+    const cause = await resolveDeletionCause(
+      '/fake/repo',
+      'feature',
+      "error: The branch 'feature' is not fully merged."
+    );
+
+    assert.strictEqual(cause, 'unmerged');
+    assert.strictEqual(runGitStub.called, false);
   });
 
   // ========================================
