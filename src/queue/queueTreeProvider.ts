@@ -4,6 +4,7 @@ import {
   checkoutBranch,
   classifyDeletionCause,
   confirm,
+  confirmSwitchAwayTarget,
   deleteLocalBranch,
   deleteRemoteBranch,
   deletionCauseMessage,
@@ -11,7 +12,6 @@ import {
   getCfg,
   getUpstreamMap,
   isProtectedBranch,
-  resolveBaseBranch,
   resolveDeletionCause,
   splitRemoteRef,
   type DeletionQueueItem,
@@ -218,7 +218,8 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
             await this.runDeletion(
               item,
               () => deleteLocalBranch(repo.repoRoot, item.name, force || cfg.forceDeleteLocal),
-              progress
+              progress,
+              repo.repoRoot
             );
             return;
           }
@@ -241,7 +242,8 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
           await this.runDeletion(
             item,
             () => deleteRemoteBranch(repo.repoRoot, remote, name),
-            progress
+            progress,
+            repo.repoRoot
           );
         }
       );
@@ -289,21 +291,12 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
     }
 
     const repo = this.repo;
-    const base = await resolveBaseBranch(repo.repoRoot);
-    // resolveBaseBranch falls back to the current branch when no canonical
-    // base exists — which here IS the branch being deleted. Bail out instead
-    // of offering a nonsensical "switch to X and delete X".
-    if (base === item.name) {
-      vscode.window.showWarningMessage(
-        vscode.l10n.t('No other branch to switch to. Configure a base branch in settings.')
-      );
-      return;
-    }
-
-    // Always confirm regardless of confirmBeforeDelete: this changes the
-    // user's checked-out branch as a side effect, not just deletes one.
-    const ok = await confirm(vscode.l10n.t('Switch to {0} and delete {1}?', base, item.name));
-    if (!ok) {
+    // Shared with the panel's single-delete recovery: resolves the base,
+    // refuses a self-switch, and always confirms (regardless of
+    // confirmBeforeDelete — this changes the user's checked-out branch as a
+    // side effect, not just deletes one).
+    const base = await confirmSwitchAwayTarget(repo.repoRoot, item.name);
+    if (!base) {
       return;
     }
 
@@ -328,7 +321,8 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
           await this.runDeletion(
             item,
             () => deleteLocalBranch(repo.repoRoot, item.name, cfg.forceDeleteLocal),
-            progress
+            progress,
+            repo.repoRoot
           );
         }
       );
@@ -425,7 +419,8 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
       await this.runDeletion(
         item,
         () => deleteLocalBranch(repo.repoRoot, item.name, cfg.forceDeleteLocal),
-        progress
+        progress,
+        repo.repoRoot
       );
       if (item.status === 'failed') {
         failedLocals.push(item);
@@ -437,13 +432,26 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
     // under -D and deserve their own classified message instead.
     const unmergedFailedLocals = failedLocals.filter(i => i.errorCause === 'unmerged');
     if (unmergedFailedLocals.length > 0 && !cfg.forceDeleteLocal) {
-      const forceDelete = await confirm(
+      // Deliberately NOT the generic Yes confirm(): this dialog pops right
+      // after "Delete N branches?" and was being reflexively accepted as a
+      // perceived duplicate. An explicit destructive button plus the branch
+      // list makes the data-loss consent unmistakable.
+      const forceAction = vscode.l10n.t('Force Delete');
+      const pick = await vscode.window.showWarningMessage(
         vscode.l10n.t(
           '{0} branches are not fully merged. Force delete them?',
           unmergedFailedLocals.length
-        )
+        ),
+        {
+          modal: true,
+          detail: vscode.l10n.t(
+            'Unmerged commits will be lost: {0}',
+            unmergedFailedLocals.map(i => i.name).join(', ')
+          ),
+        },
+        forceAction
       );
-      if (forceDelete) {
+      if (pick === forceAction) {
         for (const item of unmergedFailedLocals) {
           item.status = 'pending';
           item.error = undefined;
@@ -452,7 +460,8 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
           await this.runDeletion(
             item,
             () => deleteLocalBranch(repo.repoRoot, item.name, true),
-            progress
+            progress,
+            repo.repoRoot
           );
         }
       }
@@ -550,7 +559,8 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
       await this.runDeletion(
         item,
         () => deleteRemoteBranch(repo.repoRoot, remote, name),
-        progress
+        progress,
+        repo.repoRoot
       );
     }
 
@@ -575,7 +585,8 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
   private async runDeletion(
     item: DeletionQueueItem,
     deleteFn: () => Promise<void>,
-    progress: vscode.Progress<{ message?: string; increment?: number }>
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+    cwd: string
   ): Promise<void> {
     item.status = 'deleting';
     item.error = undefined;
@@ -592,8 +603,10 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
       item.error = message;
       // Local failures may need a rev-parse to tell "current branch" apart
       // from "checked out in another worktree"; remote failures never do.
-      item.errorCause = item.kind === 'local' && this.repo
-        ? await resolveDeletionCause(this.repo.repoRoot, item.name, message)
+      // cwd is the repo the deletion actually ran against (NOT this.repo,
+      // which the Switch Repository action can reassign mid-batch).
+      item.errorCause = item.kind === 'local'
+        ? await resolveDeletionCause(cwd, item.name, message)
         : classifyDeletionCause(message);
       this.fireChange();
     }

@@ -9,6 +9,7 @@
 ## Changed
 
 - A repository-level "not found" from the remote is classified as an authentication/permission problem (hosting services report private repos as missing to unauthorized users)
+- The bulk force-delete prompt is now clearly distinct from the initial "Delete N branches?" confirmation: it uses an explicit **Force Delete** button (instead of a generic Yes) and lists the affected branches with an "unmerged commits will be lost" warning, so it can't be mistaken for a duplicate confirmation and accepted reflexively
 
 ## Fixed
 

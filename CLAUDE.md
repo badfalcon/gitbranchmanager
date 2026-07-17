@@ -63,7 +63,7 @@ Main TypeScript module containing:
   - `parseTrackShort()` - parses git ahead/behind counts
   - `simpleBranchNameValidator()` - validates branch names with localized error messages
   - `escapeHtml()` - HTML entity escaping for safety
-  - **Deletion-failure classification**: `classifyDeletionCause()` maps a raw git error to a machine-readable `DeletionErrorCause` (`unmerged` / `checkedOut` / `refLocked` / `remoteGone` / `remoteRejected` / `networkUnreachable` / `authOrPermission` / `notFound`), stripping the echoed git command line first so branch names can't false-positive. `resolveDeletionCause()` refines the ambiguous `checkedOut` into `checkedOutCurrent` vs `checkedOutWorktree` via one extra `getCurrentBranch()` call. `deletionCauseMessage()` maps a cause to its localized display string; `classifyDeletionError()` is the backward-compatible string-only wrapper
+  - **Deletion-failure classification**: `classifyDeletionCause()` maps a raw git error to a machine-readable `DeletionErrorCause` (`unmerged` / `checkedOut` / `refLocked` / `remoteGone` / `remoteRejected` / `networkUnreachable` / `authOrPermission` / `notFound`), stripping the echoed git command line first so branch names can't false-positive. `resolveDeletionCause()` refines the ambiguous `checkedOut` into `checkedOutCurrent` vs `checkedOutWorktree` via one extra `getCurrentBranch()` call. `deletionCauseMessage()` maps a cause to its localized display string; `classifyDeletionError()` is the backward-compatible string-only wrapper. `confirmSwitchAwayTarget()` is the shared prelude of the "switch away, then delete" recovery (base resolution + self-switch guard + modal consent), used by both panel.ts and queueTreeProvider.ts
 
 ### **Git Execution** ([src/git/gitRunner.ts](src/git/gitRunner.ts))
 - `runGit(cwd, args)` - executes git commands via `child_process.execFile`
@@ -149,6 +149,7 @@ Main TypeScript module containing:
 **Single-delete failure recovery** (per-row Delete button, [src/webview/panel.ts](src/webview/panel.ts)):
 - Failures are classified via `resolveDeletionCause()` / `classifyDeletionCause()` and handled by `handleLocalDeleteFailure()` / `handleRemoteDeleteFailure()`
 - `unmerged` → modal offers **Force Delete** (`-D`); `checkedOutCurrent` → modal offers **Switch & Delete** (checkout base branch, then delete; guarded when no other branch exists); `remoteGone` → modal offers **Update Tracking Refs** (`fetch --prune`); other causes show the classified message (or raw error if unclassified)
+- A retry that fails again is fed back through `handleLocalDeleteFailure` for reclassification (e.g. switch succeeds but the branch is also unmerged → Force Delete is still offered); the `isRecoveryRetry` flag breaks the recursion
 - Prompts are `{ modal: true }` on purpose: they run while the panel's `busy` flag is held, and an unanswered non-modal toast would freeze the webview
 
 **Remote branch deletion** (when "Also delete corresponding remote branches" is checked):

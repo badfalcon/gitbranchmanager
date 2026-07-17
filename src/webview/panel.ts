@@ -6,6 +6,7 @@ import {
   checkoutBranch,
   classifyDeletionCause,
   confirm,
+  confirmSwitchAwayTarget,
   createBranch,
   deleteLocalBranch,
   deleteRemoteBranch,
@@ -328,12 +329,18 @@ export async function openManagerPanel(
  * Modal is required: this runs while the panel's `busy` flag is held, and a
  * non-modal notification left unanswered would freeze the webview forever.
  * Never rethrows — all outcomes are surfaced here.
+ *
+ * A retry that fails again is fed back through this handler so the new
+ * failure is reclassified (e.g. current branch turns out to also be unmerged
+ * after switching — the user still gets the Force Delete offer).
+ * `isRecoveryRetry` breaks the recursion for the switch-away path.
  */
 async function handleLocalDeleteFailure(
   cwd: string,
   name: string,
   err: unknown,
-  alreadyForced: boolean
+  alreadyForced: boolean,
+  isRecoveryRetry = false
 ): Promise<void> {
   const message = err instanceof Error ? err.message : String(err);
   const cause = await resolveDeletionCause(cwd, name, message);
@@ -346,35 +353,30 @@ async function handleLocalDeleteFailure(
       try {
         await deleteLocalBranch(cwd, name, true);
       } catch (e2) {
-        vscode.window.showErrorMessage(e2 instanceof Error ? e2.message : String(e2));
+        await handleLocalDeleteFailure(cwd, name, e2, true, true);
       }
     }
     return;
   }
 
-  if (cause === 'checkedOutCurrent') {
-    const base = await resolveBaseBranch(cwd);
-    // resolveBaseBranch falls back to the current branch when no canonical
-    // base exists — i.e. the branch being deleted. Don't offer a self-switch.
-    if (base === name) {
-      vscode.window.showWarningMessage(
-        vscode.l10n.t('No other branch to switch to. Configure a base branch in settings.')
-      );
+  if (cause === 'checkedOutCurrent' && !isRecoveryRetry) {
+    const base = await confirmSwitchAwayTarget(cwd, name);
+    if (!base) {
       return;
     }
-    const switchAction = vscode.l10n.t('Switch & Delete');
-    const pick = await vscode.window.showWarningMessage(
-      vscode.l10n.t('{0} is the current branch. Switch to {1} and delete it?', name, base),
-      { modal: true },
-      switchAction
-    );
-    if (pick === switchAction) {
-      try {
-        await checkoutBranch(cwd, base);
-        await deleteLocalBranch(cwd, name, alreadyForced);
-      } catch (e2) {
-        vscode.window.showErrorMessage(e2 instanceof Error ? e2.message : String(e2));
-      }
+    try {
+      await checkoutBranch(cwd, base);
+    } catch (e2) {
+      // e.g. dirty working tree — the delete was never retried
+      vscode.window.showErrorMessage(e2 instanceof Error ? e2.message : String(e2));
+      return;
+    }
+    try {
+      await deleteLocalBranch(cwd, name, alreadyForced);
+    } catch (e2) {
+      // Reclassify the second failure (commonly 'unmerged') instead of
+      // dumping the raw git error without a recovery action.
+      await handleLocalDeleteFailure(cwd, name, e2, alreadyForced, true);
     }
     return;
   }

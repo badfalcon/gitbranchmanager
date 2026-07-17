@@ -389,8 +389,10 @@ export function classifyDeletionCause(
     m.includes('permission denied') ||
     m.includes('access denied') ||
     // Hosting services answer unauthorized access to private repos with
-    // "repository not found" — a repo-level 404 is almost always credentials.
-    (m.includes('repository') && m.includes('not found'))
+    // "repository 'URL' not found" — a repo-level 404 is almost always
+    // credentials. Match git's exact phrasing so a plain branch-not-found
+    // message that merely mentions "repository" elsewhere isn't caught.
+    /repository '[^']*' not found/.test(m)
   ) {
     return 'authOrPermission';
   }
@@ -462,6 +464,36 @@ export async function resolveDeletionCause(
   }
   const current = await getCurrentBranch(cwd);
   return current === branchName ? 'checkedOutCurrent' : 'checkedOutWorktree';
+}
+
+/**
+ * Shared prelude of the "switch away, then delete the current branch"
+ * recovery (used by both the panel's single-delete path and the queue's
+ * Switch & Delete action): resolve the base branch, refuse a self-switch,
+ * and get explicit modal consent. Returns the branch to switch to, or
+ * undefined when unavailable or declined.
+ */
+export async function confirmSwitchAwayTarget(
+  cwd: string,
+  branchName: string
+): Promise<string | undefined> {
+  const base = await resolveBaseBranch(cwd);
+  // resolveBaseBranch falls back to the current branch when no canonical
+  // base exists — which here IS the branch being deleted. Bail out instead
+  // of offering a nonsensical "switch to X and delete X".
+  if (base === branchName) {
+    vscode.window.showWarningMessage(
+      vscode.l10n.t('No other branch to switch to. Configure a base branch in settings.')
+    );
+    return undefined;
+  }
+  const switchAction = vscode.l10n.t('Switch & Delete');
+  const pick = await vscode.window.showWarningMessage(
+    vscode.l10n.t('{0} is the current branch. Switch to {1} and delete it?', branchName, base),
+    { modal: true },
+    switchAction
+  );
+  return pick === switchAction ? base : undefined;
 }
 
 /**

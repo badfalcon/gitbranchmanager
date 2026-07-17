@@ -212,6 +212,15 @@ suite('Unit functions', () => {
       classifyDeletionCause("error: branch 'feature' not found."),
       'notFound'
     );
+    // A branch-not-found message that merely mentions "repository" elsewhere
+    // must NOT be pulled into the auth bucket — only git's exact
+    // "repository '...' not found" phrasing counts as a repo-level 404.
+    assert.strictEqual(
+      classifyDeletionCause(
+        "error: branch 'feature' not found.\nhint: check the branches in this repository with 'git branch -a'"
+      ),
+      'notFound'
+    );
   });
 
   test('classifyDeletionCause: unknown / empty messages return undefined', () => {
