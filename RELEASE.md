@@ -22,15 +22,15 @@ git push --follow-tags
 
 `npm run release` は次を自動で行う。
 
-- 前提チェック — master にいる / working tree が clean / origin と同期済み / タグが未存在 / `CHANGELOG.md` の `[Unreleased]` が空でない
-- `npm test`（lint・コンパイル・テスト）
+- 前提チェック — 指定バージョンが現在のバージョンより新しいこと / master にいる / working tree が clean / origin と同期済み / タグが未存在 / `CHANGELOG.md` の `[Unreleased]` が空でない
+- `npm test`（テスト用コードのコンパイル → 本体のコンパイル → lint → テスト実行）
 - `package.json` と `package-lock.json` のバージョン更新
 - `CHANGELOG.md` の `# [Unreleased]` を `# [1.7.0] - YYYY-MM-DD` に確定し、新しい空の `[Unreleased]` を先頭に追加
 - `chore(release): 1.7.0` コミットと `v1.7.0` 注釈付きタグの作成
 
 push は自動化していない。コミットとタグを目視確認してから公開する余地を残すためである。
 
-事前に何が起きるか確認したいときは dry-run を使う。ファイルも git の状態も変更しない。
+事前に何が起きるか確認したいときは dry-run を使う。`npm test` は実行されるため `dist/` や `out/` にビルド成果物は書き込まれるが、`package.json` / `package-lock.json` / `CHANGELOG.md` は変更されず、コミットもタグも作成されない。
 
 ```bash
 npm run release 1.7.0 -- --dry-run
@@ -82,14 +82,35 @@ git reset --hard HEAD~1
 
 ### タグを push した後で誤りに気づいた
 
-Marketplace は同一バージョンの再公開を受け付けない。**バージョンを上げてやり直す**のが唯一の正攻法である。
+まずワークフローの実行そのものを止められないか確認する。**`git push --delete` でタグを origin から消してもワークフローは止まらない。** 実行はタグの指す SHA を checkout 済みで動いているため、`release.yml` の検証ステップは `$GITHUB_REF_NAME` と `package.json` を比較するだけで、タグが origin にまだ存在するかどうかは一切見ていない。タグを消しても test・package・publish は最後まで進んでしまう。
 
 ```bash
-git push --delete origin v1.7.0   # ワークフローが publish に到達する前なら間に合う
+gh run list --workflow=Release --limit 3
+gh run cancel <run-id>
+```
+
+Actions の実行ページの Cancel ボタンからでもよい。ただし、これで取り消せるのは実行がまだ publish ステップに到達していない場合だけである。すでに Marketplace への publish が終わっていれば、そのバージョンは公開済みであり、Marketplace は同一バージョンの再公開を受け付けないため、後から取り消す手段はない。
+
+ワークフローを止められたかどうかに関わらず、その後の対応は 2 つある。
+
+**推奨: バージョンを上げてやり直す** — publish が実行された、またはされた可能性がある場合はこちらしかない。push 済みのコミットとタグはそのままにして、修正してから新しいバージョンでリリースし直す。
+
+```bash
+# 修正してから
+npm run release 1.7.1
+git push --follow-tags
+```
+
+**履歴を書き換える** — 何も publish されておらず、誰も pull していないと確信できる場合に限る。この場合は origin/master への push 自体を取り消す必要がある。
+
+```bash
+git push --delete origin v1.7.0
 git tag -d v1.7.0
 git reset --hard HEAD~1
-# 修正してから npm run release 1.7.1
+git push --force-with-lease origin master
 ```
+
+`push --force-with-lease` は origin/master の履歴を書き換える操作である。他の人が pull していれば混乱を招くが、ここでは単一メンテナのリポジトリであることを前提に許容している。
 
 ### Marketplace は成功したが Open VSX で失敗した
 
@@ -109,17 +130,32 @@ npm run package:vsix
 npx ovsx publish gitsouji-1.7.0.vsix -p <OVSX_PAT>
 ```
 
-同じ artifact は、GitHub Release の作成ステップだけが失敗した場合の手動リカバリにも使える。ダウンロードした `.vsix` を該当タグの GitHub Release にアセットとして手動でアップロードすればよい。
+同じ artifact は、GitHub Release の作成ステップだけが失敗した場合の手動リカバリにも使える。ダウンロードした `.vsix` を該当タグの GitHub Release にアセットとして手動でアップロードすればよい。リリース本文（`release-notes.md`）はワークフロー内で生成される一時ファイルで、失敗した実行には残っていない。本文には `CHANGELOG.md` の該当バージョンのセクションをそのまま使うか、`node scripts/lib/changelog.mjs extract <version>` で再生成して貼り付ける。
 
 ### タグと package.json のバージョンが一致しないと言われた
 
-ワークフローの最初のステップで停止しており、publish には到達していない。タグを打ち直せば安全に復旧できる。
+ワークフローの最初のステップ（タグと package.json の一致検証）で停止しており、テストや publish には到達していない。ただし `git push --follow-tags` でコミットは origin/master に push 済みなので、ローカルを `git reset --hard` で巻き戻すだけでは古いコミットが origin に残ってしまい、次の `npm run release` が「origin より N コミット遅れている」という前提チェックで失敗する。対応は 2 つ。
+
+**推奨: バージョンを上げてやり直す** — push 済みのコミットとタグはそのままにして、正しいバージョンで新たにリリースし直す。
 
 ```bash
 git push --delete origin v1.7.0
 git tag -d v1.7.0
+npm run release 1.7.1
+git push --follow-tags
+```
+
+**履歴を書き換える** — この失敗はワークフローの最初のステップで止まるため何も publish されていない。誰も origin/master を pull していないと確信できるなら、書き換えても実害はない。
+
+```bash
+git push --delete origin v1.7.0
+git tag -d v1.7.0
+git reset --hard HEAD~1
+git push --force-with-lease origin master
 # package.json を正しいバージョンに直してから npm run release をやり直す
 ```
+
+`push --force-with-lease` は origin/master の履歴を書き換える操作である。単一メンテナのリポジトリであることを前提に許容している。
 
 ## 関連ファイル
 
@@ -127,7 +163,7 @@ git tag -d v1.7.0
 | --- | --- |
 | `scripts/release.mjs` | リリース準備（前提チェック、バージョン更新、コミット、タグ） |
 | `scripts/lib/changelog.mjs` | CHANGELOG の確定とセクション抽出 |
-| `.github/workflows/ci.yml` | push / PR でのテスト |
+| `.github/workflows/ci.yml` | push でのテスト（全ブランチ、PR トリガーなし） |
 | `.github/workflows/release.yml` | タグ push での公開 |
 | `STORE.md` | Marketplace 上の説明文（`package.json` の `readme` で指定） |
 | `.vscodeignore` | `.vsix` に含めないファイルの指定 |
