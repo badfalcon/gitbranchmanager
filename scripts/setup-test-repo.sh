@@ -9,18 +9,27 @@
 # whenever you want a clean, known state.
 #
 # Usage:
-#   bash scripts/setup-test-repo.sh [REPO_DIR] [REMOTE_DIR]
+#   bash scripts/setup-test-repo.sh
 #
-# Defaults (Windows paths used by this project):
-#   REPO_DIR   = C:/Users/BYD-Masuda/VSCodeProjects/gitsouji-test-repo
-#   REMOTE_DIR = C:/Users/BYD-Masuda/VSCodeProjects/gitsouji-test-remote.git
+# The target is fixed to the project's own .test/ directory (git-ignored),
+# so the destructive wipe below can never point at anything else:
+#   REPO   = <projectRoot>/.test/repo
+#   REMOTE = <projectRoot>/.test/remote.git
 #
-# Then in VS Code: F5 (Extension Development Host) and open REPO_DIR.
+# Then in VS Code: F5 (Extension Development Host) and open REPO.
 #
 set -euo pipefail
 
-REPO="${1:-C:/Users/BYD-Masuda/VSCodeProjects/gitsouji-test-repo}"
-REMOTE="${2:-C:/Users/BYD-Masuda/VSCodeProjects/gitsouji-test-remote.git}"
+if [ "$#" -gt 0 ]; then
+  echo "error: this script takes no arguments; it only ever targets <projectRoot>/.test/" >&2
+  exit 1
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+REPO="$PROJECT_ROOT/.test/repo"
+REMOTE="$PROJECT_ROOT/.test/remote.git"
 
 # Authors (name <email>) used across branches to exercise the Author column,
 # including a CJK name, an accented name, and a very long name (ellipsis).
