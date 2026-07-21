@@ -75,6 +75,18 @@
         "icon": "$(debug-rerun)"
       },
       {
+        "command": "gitsouji.queue.switchAndRetry",
+        "title": "%command.queue.switchAndRetry.title%",
+        "category": "Git Sohji",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "gitsouji.queue.pruneRetry",
+        "title": "%command.queue.pruneRetry.title%",
+        "category": "Git Sohji",
+        "icon": "$(sync)"
+      },
+      {
         "command": "gitsouji.switchRepository",
         "title": "%command.switchRepository.title%",
         "category": "Git Sohji",
@@ -205,13 +217,23 @@
       "view/item/context": [
         {
           "command": "gitsouji.queue.retry",
-          "when": "view == gitsouji.deletionQueue && (viewItem == queueItemFailedLocal || (viewItem == queueItemFailedRemote && config.gitSouji.allowRemoteBranchDeletion)) && !gitsouji.queueExecuting",
+          "when": "view == gitsouji.deletionQueue && (viewItem =~ /^queueItemFailedLocal(:|$)/ || (viewItem =~ /^queueItemFailedRemote(:|$)/ && config.gitSouji.allowRemoteBranchDeletion)) && !gitsouji.queueExecuting",
           "group": "1_retry@1"
         },
         {
           "command": "gitsouji.queue.forceRetry",
-          "when": "view == gitsouji.deletionQueue && viewItem == queueItemFailedLocal && !gitsouji.queueExecuting",
+          "when": "view == gitsouji.deletionQueue && viewItem == queueItemFailedLocal:unmerged && !gitsouji.queueExecuting",
           "group": "1_retry@2"
+        },
+        {
+          "command": "gitsouji.queue.switchAndRetry",
+          "when": "view == gitsouji.deletionQueue && viewItem == queueItemFailedLocal:checkedOutCurrent && !gitsouji.queueExecuting",
+          "group": "1_retry@3"
+        },
+        {
+          "command": "gitsouji.queue.pruneRetry",
+          "when": "view == gitsouji.deletionQueue && viewItem == queueItemFailedRemote:remoteGone && config.gitSouji.allowRemoteBranchDeletion && !gitsouji.queueExecuting",
+          "group": "1_retry@4"
         },
         {
           "command": "gitsouji.queue.removeItem",
@@ -243,6 +265,14 @@
         },
         {
           "command": "gitsouji.queue.forceRetry",
+          "when": "false"
+        },
+        {
+          "command": "gitsouji.queue.switchAndRetry",
+          "when": "false"
+        },
+        {
+          "command": "gitsouji.queue.pruneRetry",
           "when": "false"
         }
       ]

@@ -1,3 +1,22 @@
+# [Unreleased]
+
+## Added
+
+- **Cause-specific recovery for failed deletions**: single-row deletes now classify the failure and offer the matching fix — **Force Delete** (`-D`) when the branch is not fully merged, **Switch & Delete** when it is the currently checked-out branch, and **Update Tracking Refs** (`fetch --prune`) when the remote branch is already gone
+- **Cause-aware queue context menu**: failed queue items expose only the actions that fit their failure — Force Retry appears only for unmerged branches, plus new **Switch & Delete** (current branch) and **Update Tracking Refs** (remote already gone) actions
+- New failure classifications: network unreachable (separate from authentication/permission), ref lock contention, and "current branch" distinguished from "checked out in another worktree"
+
+## Changed
+
+- A repository-level "not found" from the remote is classified as an authentication/permission problem (hosting services report private repos as missing to unauthorized users)
+- The bulk force-delete prompt is now clearly distinct from the initial "Delete N branches?" confirmation: it uses an explicit **Force Delete** button (instead of a generic Yes) and lists the affected branches with an "unmerged commits will be lost" warning, so it can't be mistaken for a duplicate confirmation and accepted reflexively
+
+## Fixed
+
+- The bulk force-delete prompt after queue execution now counts and retries only the branches that actually failed as *not fully merged*; other failures (e.g. checked-out branches) keep their own explanation instead of being force-retried pointlessly
+- Failure classification no longer scans the echoed git command line, so branch names that resemble error text can't be misclassified
+- Retrying a queued local branch re-checks the protected-branch list (parity with remote retries)
+
 # [1.6.1] - 2026-05-26
 
 ## Fixed

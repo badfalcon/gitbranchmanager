@@ -68,6 +68,8 @@ export type DeletionQueueItem = {
   includeRemote?: boolean;
   status: 'pending' | 'deleting' | 'deleted' | 'failed';
   error?: string;
+  /** Machine-readable failure cause, resolved when status becomes 'failed' */
+  errorCause?: DeletionErrorCause;
 };
 
 // =====================
@@ -297,52 +299,201 @@ export function escapeHtml(s: unknown): string {
     .replace(/'/g, APOS);
 }
 
+/** Machine-readable cause of a failed branch deletion. */
+export type DeletionErrorCause =
+  // Coarse "checked out somewhere" — the git message alone cannot tell the
+  // current branch apart from another worktree; resolveDeletionCause refines it.
+  | 'unmerged'
+  | 'checkedOut'
+  | 'checkedOutCurrent'
+  | 'checkedOutWorktree'
+  | 'refLocked'
+  | 'remoteGone'
+  | 'remoteRejected'
+  | 'networkUnreachable'
+  | 'authOrPermission'
+  | 'notFound';
+
 /**
- * Map a raw git branch-deletion error to a concise, human-friendly reason.
- * Returns undefined when the message matches no known pattern, in which case
- * the caller should fall back to showing the raw error.
+ * GitError messages are shaped `git <args> failed: Command failed: git <args>
+ * <stderr>` (our wrapper plus Node's execFile message), so the branch name
+ * appears in the text before the actual stderr. Strip both command echoes so
+ * a name like "fix/not-fully-merged-thing" can't graze substring patterns.
  */
-export function classifyDeletionError(message: string | undefined): string | undefined {
+function stripGitCommandPrefix(message: string): string {
+  return message
+    .replace(/^git .*? failed: /s, '')
+    .replace(/^Command failed: git [^\n]*\n?/, '');
+}
+
+/**
+ * Map a raw git branch-deletion error to a machine-readable cause.
+ * Returns undefined when the message matches no known pattern.
+ * Never returns 'checkedOutCurrent'/'checkedOutWorktree' — only the coarse
+ * 'checkedOut'; use resolveDeletionCause to refine those.
+ */
+export function classifyDeletionCause(
+  message: string | undefined
+): DeletionErrorCause | undefined {
   if (!message) {
     return undefined;
   }
-  const m = message.toLowerCase();
+  const m = stripGitCommandPrefix(message).toLowerCase();
 
   if (m.includes('not fully merged')) {
-    return vscode.l10n.t('Not fully merged — enable force delete (-D) to remove it.');
+    return 'unmerged';
   }
   if (
     m.includes('checked out') ||
     m.includes('used by worktree') ||
     (m.includes('cannot delete') && m.includes('currently'))
   ) {
-    return vscode.l10n.t('This branch is checked out and cannot be deleted.');
+    return 'checkedOut';
+  }
+  if (
+    m.includes('cannot lock ref') ||
+    m.includes('unable to lock ref') ||
+    (m.includes('unable to create') && m.includes('.lock'))
+  ) {
+    return 'refLocked';
   }
   if (
     m.includes('remote ref does not exist') ||
     (m.includes('unable to delete') && m.includes('remote'))
   ) {
-    return vscode.l10n.t('The remote branch no longer exists.');
+    return 'remoteGone';
   }
   if (
     m.includes('remote rejected') ||
     m.includes('pre-receive hook declined') ||
     m.includes('protected branch')
   ) {
-    return vscode.l10n.t('The remote rejected the deletion (protected branch or server hook).');
+    return 'remoteRejected';
+  }
+  // Network patterns must be checked before authOrPermission: SSH failures
+  // often contain both a specific network line and the generic "could not
+  // read from remote repository" wrapper.
+  if (
+    m.includes('could not resolve host') ||
+    m.includes('could not resolve hostname') ||
+    m.includes('timed out') ||
+    m.includes('could not connect to server') ||
+    m.includes('network is unreachable') ||
+    m.includes('failed to connect')
+  ) {
+    return 'networkUnreachable';
   }
   if (
     m.includes('authentication failed') ||
     m.includes('could not read from remote') ||
     m.includes('permission denied') ||
-    m.includes('access denied')
+    m.includes('access denied') ||
+    // Hosting services answer unauthorized access to private repos with
+    // "repository 'URL' not found" — a repo-level 404 is almost always
+    // credentials. Match git's exact phrasing so a plain branch-not-found
+    // message that merely mentions "repository" elsewhere isn't caught.
+    /repository '[^']*' not found/.test(m)
   ) {
-    return vscode.l10n.t('Could not reach the remote (authentication or permission error).');
+    return 'authOrPermission';
   }
   if (m.includes('not found') || m.includes("couldn't find remote ref")) {
-    return vscode.l10n.t('Branch not found.');
+    return 'notFound';
   }
   return undefined;
+}
+
+/** Human-friendly, localized message for a deletion-failure cause. */
+export function deletionCauseMessage(cause: DeletionErrorCause): string {
+  switch (cause) {
+    case 'unmerged':
+      return vscode.l10n.t('Not fully merged — enable force delete (-D) to remove it.');
+    case 'checkedOut':
+    case 'checkedOutWorktree':
+      return vscode.l10n.t('This branch is checked out and cannot be deleted.');
+    case 'checkedOutCurrent':
+      return vscode.l10n.t('This is the current branch — switch away before deleting it.');
+    case 'refLocked':
+      return vscode.l10n.t(
+        'Another Git process is holding a lock on this ref. Try again in a moment.'
+      );
+    case 'remoteGone':
+      return vscode.l10n.t('The remote branch no longer exists.');
+    case 'remoteRejected':
+      return vscode.l10n.t('The remote rejected the deletion (protected branch or server hook).');
+    case 'networkUnreachable':
+      return vscode.l10n.t('Could not connect to the remote — check your network connection.');
+    case 'authOrPermission':
+      return vscode.l10n.t('Could not reach the remote (authentication or permission error).');
+    case 'notFound':
+      return vscode.l10n.t('Branch not found.');
+  }
+}
+
+/**
+ * Map a raw git branch-deletion error to a concise, human-friendly reason.
+ * Returns undefined when the message matches no known pattern, in which case
+ * the caller should fall back to showing the raw error.
+ * Kept as a backward-compatible wrapper; prefer classifyDeletionCause +
+ * deletionCauseMessage for cause-aware handling.
+ */
+export function classifyDeletionError(message: string | undefined): string | undefined {
+  const cause = classifyDeletionCause(message);
+  return cause ? deletionCauseMessage(cause) : undefined;
+}
+
+/**
+ * Classify a deletion failure, refining the ambiguous 'checkedOut' cause into
+ * 'checkedOutCurrent' vs 'checkedOutWorktree' by asking git for the current
+ * branch (one extra `git rev-parse`, only when needed). Notes:
+ * - Detached HEAD makes getCurrentBranch return undefined, so a checked-out
+ *   failure conservatively resolves to 'checkedOutWorktree' (there is no
+ *   "current branch" to offer switching away from).
+ * - cwd is the opened folder (which may itself be a linked worktree), so the
+ *   comparison correctly means "checked out in THIS worktree".
+ * - An out-of-band checkout between the failed delete and the rev-parse could
+ *   skew the result; that tiny staleness window is acceptable.
+ */
+export async function resolveDeletionCause(
+  cwd: string,
+  branchName: string,
+  message: string | undefined
+): Promise<DeletionErrorCause | undefined> {
+  const coarse = classifyDeletionCause(message);
+  if (coarse !== 'checkedOut') {
+    return coarse;
+  }
+  const current = await getCurrentBranch(cwd);
+  return current === branchName ? 'checkedOutCurrent' : 'checkedOutWorktree';
+}
+
+/**
+ * Shared prelude of the "switch away, then delete the current branch"
+ * recovery (used by both the panel's single-delete path and the queue's
+ * Switch & Delete action): resolve the base branch, refuse a self-switch,
+ * and get explicit modal consent. Returns the branch to switch to, or
+ * undefined when unavailable or declined.
+ */
+export async function confirmSwitchAwayTarget(
+  cwd: string,
+  branchName: string
+): Promise<string | undefined> {
+  const base = await resolveBaseBranch(cwd);
+  // resolveBaseBranch falls back to the current branch when no canonical
+  // base exists — which here IS the branch being deleted. Bail out instead
+  // of offering a nonsensical "switch to X and delete X".
+  if (base === branchName) {
+    vscode.window.showWarningMessage(
+      vscode.l10n.t('No other branch to switch to. Configure a base branch in settings.')
+    );
+    return undefined;
+  }
+  const switchAction = vscode.l10n.t('Switch & Delete');
+  const pick = await vscode.window.showWarningMessage(
+    vscode.l10n.t('{0} is the current branch. Switch to {1} and delete it?', branchName, base),
+    { modal: true },
+    switchAction
+  );
+  return pick === switchAction ? base : undefined;
 }
 
 /**

@@ -4,10 +4,13 @@ import { randomBytes } from 'node:crypto';
 
 import {
   checkoutBranch,
+  classifyDeletionCause,
   confirm,
+  confirmSwitchAwayTarget,
   createBranch,
   deleteLocalBranch,
   deleteRemoteBranch,
+  deletionCauseMessage,
   fetchWithPrune,
   getCfg,
   getCurrentBranch,
@@ -17,6 +20,7 @@ import {
   mergeIntoCurrent,
   renameBranch,
   resolveBaseBranch,
+  resolveDeletionCause,
   simpleBranchNameValidator,
   type RepoContext,
   type WebviewMessage,
@@ -231,7 +235,11 @@ export async function openManagerPanel(
               break;
             }
 
-            await deleteLocalBranch(repo.repoRoot, msg.name, cfg.forceDeleteLocal);
+            try {
+              await deleteLocalBranch(repo.repoRoot, msg.name, cfg.forceDeleteLocal);
+            } catch (err) {
+              await handleLocalDeleteFailure(repo.repoRoot, msg.name, err, cfg.forceDeleteLocal);
+            }
             await refresh();
             break;
           }
@@ -281,7 +289,11 @@ export async function openManagerPanel(
               break;
             }
 
-            await deleteRemoteBranch(repo.repoRoot, msg.remote, msg.name);
+            try {
+              await deleteRemoteBranch(repo.repoRoot, msg.remote, msg.name);
+            } catch (err) {
+              await handleRemoteDeleteFailure(repo.repoRoot, msg.remote, msg.name, err);
+            }
             await refresh();
             break;
           }
@@ -309,6 +321,99 @@ export async function openManagerPanel(
   );
 
   await refresh();
+}
+
+/**
+ * Cause-aware handling for a failed single local-branch delete. Shows the
+ * classified reason and, where a recovery exists, offers it as a modal action.
+ * Modal is required: this runs while the panel's `busy` flag is held, and a
+ * non-modal notification left unanswered would freeze the webview forever.
+ * Never rethrows — all outcomes are surfaced here.
+ *
+ * A retry that fails again is fed back through this handler so the new
+ * failure is reclassified (e.g. current branch turns out to also be unmerged
+ * after switching — the user still gets the Force Delete offer).
+ * `isRecoveryRetry` breaks the recursion for the switch-away path.
+ */
+async function handleLocalDeleteFailure(
+  cwd: string,
+  name: string,
+  err: unknown,
+  alreadyForced: boolean,
+  isRecoveryRetry = false
+): Promise<void> {
+  const message = err instanceof Error ? err.message : String(err);
+  const cause = await resolveDeletionCause(cwd, name, message);
+  const display = cause ? deletionCauseMessage(cause) : message;
+
+  if (cause === 'unmerged' && !alreadyForced) {
+    const forceAction = vscode.l10n.t('Force Delete');
+    const pick = await vscode.window.showWarningMessage(display, { modal: true }, forceAction);
+    if (pick === forceAction) {
+      try {
+        await deleteLocalBranch(cwd, name, true);
+      } catch (e2) {
+        await handleLocalDeleteFailure(cwd, name, e2, true, true);
+      }
+    }
+    return;
+  }
+
+  if (cause === 'checkedOutCurrent' && !isRecoveryRetry) {
+    const base = await confirmSwitchAwayTarget(cwd, name);
+    if (!base) {
+      return;
+    }
+    try {
+      await checkoutBranch(cwd, base);
+    } catch (e2) {
+      // e.g. dirty working tree — the delete was never retried
+      vscode.window.showErrorMessage(e2 instanceof Error ? e2.message : String(e2));
+      return;
+    }
+    try {
+      await deleteLocalBranch(cwd, name, alreadyForced);
+    } catch (e2) {
+      // Reclassify the second failure (commonly 'unmerged') instead of
+      // dumping the raw git error without a recovery action.
+      await handleLocalDeleteFailure(cwd, name, e2, alreadyForced, true);
+    }
+    return;
+  }
+
+  vscode.window.showErrorMessage(display);
+}
+
+/**
+ * Cause-aware handling for a failed single remote-branch delete.
+ * Never rethrows — all outcomes are surfaced here.
+ */
+async function handleRemoteDeleteFailure(
+  cwd: string,
+  remote: string,
+  name: string,
+  err: unknown
+): Promise<void> {
+  const message = err instanceof Error ? err.message : String(err);
+  // Remote failures never resolve to a checkedOut* cause, so the sync
+  // classifier is enough here.
+  const cause = classifyDeletionCause(message);
+  const display = cause ? deletionCauseMessage(cause) : message;
+
+  if (cause === 'remoteGone') {
+    const pruneAction = vscode.l10n.t('Update Tracking Refs');
+    const pick = await vscode.window.showWarningMessage(display, { modal: true }, pruneAction);
+    if (pick === pruneAction) {
+      try {
+        await fetchWithPrune(cwd, remote);
+      } catch (e2) {
+        vscode.window.showWarningMessage(e2 instanceof Error ? e2.message : String(e2));
+      }
+    }
+    return;
+  }
+
+  vscode.window.showErrorMessage(display);
 }
 
 let logTerminal: vscode.Terminal | undefined;
