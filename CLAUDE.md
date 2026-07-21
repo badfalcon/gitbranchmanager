@@ -272,6 +272,7 @@ npm run compile-tests && npx vscode-test --grep "isProtectedBranch"
 - **README.md** - Repository documentation (development-focused)
 - **STORE.md** - VS Code Marketplace description (user-focused, set via `package.json` `"readme"` field)
 - **CHANGELOG.md** - Version history
+- **RELEASE.md** - Release procedure (`npm run release <version>` → `git push --follow-tags` → GitHub Actions publishes)
 - **CLAUDE.md** - This file (Claude Code context)
 
 ## Important Notes
