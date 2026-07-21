@@ -9,11 +9,11 @@
   "readme": "STORE.md",
   "repository": {
     "type": "git",
-    "url": "https://github.com/badfalcon/gitbranchcleaner.git"
+    "url": "https://github.com/badfalcon/gitbranchmanager.git"
   },
-  "homepage": "https://github.com/badfalcon/gitbranchcleaner#readme",
+  "homepage": "https://github.com/badfalcon/gitbranchmanager#readme",
   "bugs": {
-    "url": "https://github.com/badfalcon/gitbranchcleaner/issues"
+    "url": "https://github.com/badfalcon/gitbranchmanager/issues"
   },
   "keywords": [
     "git",
@@ -283,11 +283,14 @@
     "compile": "webpack",
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map",
+    "package:vsix": "vsce package",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "test:scripts": "node --test scripts/lib/",
+    "release": "node scripts/release.mjs"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
@@ -296,7 +299,9 @@
     "@types/vscode": "^1.106.1",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.9.2",
     "eslint": "^9.39.1",
+    "ovsx": "^1.0.2",
     "sinon": "^21.0.1",
     "ts-loader": "^9.5.4",
     "typescript": "^5.9.3",

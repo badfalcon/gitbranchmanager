@@ -16,3 +16,9 @@ CLAUDE.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+.github/**
+docs/**
+scripts/**
+.test/**
+RELEASE.md
+*.vsix
