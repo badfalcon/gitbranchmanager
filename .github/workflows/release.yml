@@ -40,6 +40,12 @@ jobs:
       - name: Package extension
         run: npx vsce package --out "gitsouji-${VERSION}.vsix"
 
+      - name: Upload vsix artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: gitsouji-${{ env.VERSION }}.vsix
+          path: gitsouji-${{ env.VERSION }}.vsix
+
       - name: Extract release notes
         run: node scripts/lib/changelog.mjs extract "${VERSION}" > release-notes.md
 
@@ -51,7 +57,7 @@ jobs:
       - name: Publish to Open VSX
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
-        run: npx ovsx publish "gitsouji-${VERSION}.vsix" -p "${OVSX_PAT}"
+        run: npx ovsx publish "gitsouji-${VERSION}.vsix"
 
       - name: Create the GitHub release
         uses: softprops/action-gh-release@v2
