@@ -2,7 +2,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 
-import { finalizeChangelog, unreleasedBody } from './lib/changelog.mjs';
+import { extractSection, finalizeChangelog, unreleasedBody } from './lib/changelog.mjs';
 
 // 検証用に上書きできる。通常のリリースでは常に master から切る。
 const RELEASE_BRANCH = process.env.RELEASE_BRANCH ?? 'master';
@@ -103,6 +103,21 @@ try {
 	const nextChangelog = finalizeChangelog(changelog, version, date);
 
 	console.log(`release: preparing ${tag} (${date})`);
+
+	if (dryRun) {
+		// Read back from the finalized text rather than from the [Unreleased] body, so this shows
+		// what the release really produced — the same text the Marketplace changelog tab and the
+		// GitHub release body will carry. Printed before the tests so a wrong changelog can be
+		// caught without waiting several minutes for them.
+		console.log(`
+--- CHANGELOG (this release) ---
+# [${version}] - ${date}
+
+${extractSection(nextChangelog, version)}
+--------------------------------
+`);
+	}
+
 	console.log('release: running npm test');
 	run('npm', ['test']);
 
