@@ -1,5 +1,7 @@
 # [Unreleased]
 
+# [1.7.0] - 2026-07-22
+
 ## Added
 
 - **Cause-specific recovery for failed deletions**: single-row deletes now classify the failure and offer the matching fix — **Force Delete** (`-D`) when the branch is not fully merged, **Switch & Delete** when it is the currently checked-out branch, and **Update Tracking Refs** (`fetch --prune`) when the remote branch is already gone
