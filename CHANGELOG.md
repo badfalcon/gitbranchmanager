@@ -1,5 +1,15 @@
 # [Unreleased]
 
+## Fixed
+
+- **Protected branches could be deleted by the deletion queue.** The queue stores only branch names, so a branch queued before the `protectedBranches` list was edited (e.g. adding `release/*`) was still deleted by **Execute**. Execute now re-checks protection per item, matching what single retries already did
+- **Remote branches could be deleted with `allowRemoteBranchDeletion` turned off.** Queued remote entries — and the "also delete corresponding remote branches" expansion — bypassed the setting during batch execution. Both are now gated on it, and the preview's "also delete remote" checkbox is hidden (and cleared) when remote deletion is disabled
+
+## Changed
+
+- The confirmation for deleting untracked same-name remote branches now lists the branches instead of only their count — these were never tracked locally, so a same-name match on the server may belong to someone else
+- The batch confirmation now breaks down what will actually be deleted (local / remote counts, plus any remote branches added by "also delete remote"), instead of showing a single count that excluded the remote expansions
+
 # [1.7.0] - 2026-07-22
 
 ## Added
