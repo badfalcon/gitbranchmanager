@@ -114,3 +114,159 @@ suite('QueueTreeProvider batch force-delete prompt', () => {
     );
   });
 });
+
+// The queue stores only branch names, so everything the UI checked at
+// add-to-queue time (protection, remote-deletion permission) can be stale by
+// the time Execute runs. execute() must re-validate, exactly as retryItem does.
+suite('QueueTreeProvider execute-time revalidation', () => {
+  let runGitStub: sinon.SinonStub;
+  let cfgStub: sinon.SinonStub;
+  let confirmStub: sinon.SinonStub;
+  let warningStub: sinon.SinonStub;
+
+  const baseCfg: app.ExtensionConfig = {
+    baseBranch: 'auto',
+    protected: [],
+    confirmBeforeDelete: true,
+    forceDeleteLocal: false,
+    includeRemoteInDeadCleanup: false,
+    staleDays: 30,
+    autoFetchPrune: false,
+    detectParentMerges: true,
+    showStatusBadges: true,
+    allowRemoteBranchDeletion: false,
+  };
+
+  setup(() => {
+    runGitStub = sinon.stub(gitRunner, 'runGit').resolves({ stdout: '' });
+    cfgStub = sinon.stub(app, 'getCfg').returns({ ...baseCfg });
+    confirmStub = sinon.stub(app, 'confirm').resolves(true);
+    warningStub = sinon.stub(vscode.window, 'showWarningMessage');
+  });
+
+  teardown(() => {
+    runGitStub.restore();
+    cfgStub.restore();
+    confirmStub.restore();
+    warningStub.restore();
+  });
+
+  function useCfg(overrides: Partial<app.ExtensionConfig>): void {
+    cfgStub.returns({ ...baseCfg, ...overrides });
+  }
+
+  function makeProvider(items: Parameters<QueueTreeProvider['add']>[0]): QueueTreeProvider {
+    const provider = new QueueTreeProvider();
+    provider.setRepo({ repoRoot: '/fake/repo' });
+    provider.add(items);
+    return provider;
+  }
+
+  function localDeletes(): string[][] {
+    return runGitStub
+      .getCalls()
+      .map(c => c.args[1] as string[])
+      .filter(a => a[0] === 'branch' && (a[1] === '-d' || a[1] === '-D'));
+  }
+
+  function remoteDeletes(): string[][] {
+    return runGitStub
+      .getCalls()
+      .map(c => c.args[1] as string[])
+      .filter(a => a[0] === 'push' && a.includes('--delete'));
+  }
+
+  test('a local branch protected after queueing is not deleted', async () => {
+    // Queued while unprotected, then "release/*" was added to the protected list
+    useCfg({ protected: ['release/*'] });
+    const provider = makeProvider([{ name: 'release/1.0', kind: 'local' }]);
+
+    await provider.execute();
+
+    assert.deepStrictEqual(localDeletes(), [], 'no git delete may run on a protected branch');
+    const item = provider.getChildren()[0];
+    assert.strictEqual(item.status, 'failed');
+    assert.strictEqual(item.error, 'Protected branches cannot be deleted.');
+  });
+
+  test('an unprotected sibling still deletes when one item is protected', async () => {
+    useCfg({ protected: ['release/*'] });
+    const provider = makeProvider([
+      { name: 'release/1.0', kind: 'local' },
+      { name: 'feat-a', kind: 'local' },
+    ]);
+
+    await provider.execute();
+
+    assert.deepStrictEqual(localDeletes(), [['branch', '-d', '--', 'feat-a']]);
+    assert.strictEqual(provider.getChildren().find(i => i.name === 'feat-a')?.status, 'deleted');
+  });
+
+  test('a queued remote is not deleted once allowRemoteBranchDeletion is off', async () => {
+    useCfg({ allowRemoteBranchDeletion: false });
+    const provider = makeProvider([{ name: 'origin/feat-a', kind: 'remote' }]);
+
+    await provider.execute();
+
+    assert.deepStrictEqual(remoteDeletes(), [], 'no push --delete may run when the setting is off');
+    const item = provider.getChildren()[0];
+    assert.strictEqual(item.status, 'failed');
+    assert.strictEqual(item.error, 'Remote branch deletion is disabled in settings.');
+  });
+
+  test('includeRemote does not expand while allowRemoteBranchDeletion is off', async () => {
+    useCfg({ allowRemoteBranchDeletion: false });
+    const provider = makeProvider([{ name: 'feat-a', kind: 'local', includeRemote: true }]);
+
+    await provider.execute();
+
+    assert.deepStrictEqual(localDeletes(), [['branch', '-d', '--', 'feat-a']]);
+    assert.deepStrictEqual(remoteDeletes(), [], 'the local→remote expansion is a remote deletion too');
+    assert.strictEqual(provider.getChildren().length, 1, 'no remote item should be added');
+  });
+
+  test('the untracked-remote prompt names the branches instead of only counting them', async () => {
+    useCfg({ allowRemoteBranchDeletion: true });
+    runGitStub.callsFake(async (_cwd: string, args: string[]) => {
+      // getUpstreamMap: feat-a has no upstream → treated as untracked
+      if (args[0] === 'for-each-ref') {
+        return { stdout: 'refs/heads/feat-a\tfeat-a\t\t\t\n' };
+      }
+      return { stdout: '' };
+    });
+    const provider = makeProvider([{ name: 'feat-a', kind: 'local', includeRemote: true }]);
+
+    await provider.execute();
+
+    const untracked = confirmStub
+      .getCalls()
+      .find(c => String(c.args[0]).includes('not tracked'));
+    assert.ok(untracked, 'expected the untracked-remote confirmation');
+    assert.ok(
+      String(untracked.args[1]).includes('origin/feat-a'),
+      `detail must name the branch, got: ${untracked.args[1]}`
+    );
+  });
+
+  test('the batch confirmation breaks down what will actually be deleted', async () => {
+    useCfg({ allowRemoteBranchDeletion: true });
+    confirmStub.resolves(false); // cancel — we only care about the prompt
+    const provider = makeProvider([
+      { name: 'feat-a', kind: 'local', includeRemote: true },
+      { name: 'feat-b', kind: 'local' },
+      { name: 'origin/feat-c', kind: 'remote' },
+    ]);
+
+    await provider.execute();
+
+    const [message, detail] = confirmStub.firstCall.args;
+    assert.ok(String(message).includes('3'), `headline counts queue entries: ${message}`);
+    assert.ok(String(detail).includes('Local branches: 2'), `detail: ${detail}`);
+    assert.ok(String(detail).includes('Remote branches: 1'), `detail: ${detail}`);
+    assert.ok(
+      /up to 1/i.test(String(detail)),
+      `detail must disclose the includeRemote expansion: ${detail}`
+    );
+    assert.deepStrictEqual(localDeletes(), [], 'cancelling must delete nothing');
+  });
+});

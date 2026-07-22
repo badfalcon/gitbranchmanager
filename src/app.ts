@@ -150,9 +150,14 @@ export function simpleBranchNameValidator(input?: string) {
   return undefined;
 }
 
-export async function confirm(message: string) {
+/**
+ * Modal yes/no confirmation. `detail` renders as the dialog's secondary text —
+ * use it to spell out exactly what will be deleted, so a destructive prompt is
+ * never just a count the user has to take on faith.
+ */
+export async function confirm(message: string, detail?: string) {
   const yes = vscode.l10n.t('Yes');
-  const pick = await vscode.window.showWarningMessage(message, { modal: true }, yes);
+  const pick = await vscode.window.showWarningMessage(message, { modal: true, detail }, yes);
   return pick === yes;
 }
 

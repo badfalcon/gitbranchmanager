@@ -697,8 +697,12 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       previewSort = { column: 'name', direction: 'asc' };
       previewSelected = new Set(previewCandidates.map(b => b.short));
 
-      // Hide "include remote" option when cleaning remote branches
-      $('includeRemote').parentElement.style.display = cleanupMode === 'remote' ? 'none' : '';
+      // Offer "include remote" only when cleaning locals AND remote deletion is
+      // enabled. Also clear it when hidden: the checkbox is never reset between
+      // openings, so a stale tick must not survive into a run that can't honor it.
+      const canIncludeRemote = cleanupMode === 'local' && !!currentState.allowRemoteBranchDeletion;
+      $('includeRemote').parentElement.style.display = canIncludeRemote ? '' : 'none';
+      if (!canIncludeRemote) $('includeRemote').checked = false;
 
       renderPreview(previewCandidates);
       $('previewOverlay').style.display = 'block';

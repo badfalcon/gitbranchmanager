@@ -24,6 +24,40 @@ const QUEUE_VIEW_FOCUS_COMMAND = 'gitsouji.deletionQueue.focus';
 
 type QueueAddItem = { name: string; kind: 'local' | 'remote'; includeRemote?: boolean };
 
+/**
+ * Secondary text for the batch confirmation. The headline count is the number
+ * of queue entries, but `includeRemote` entries each expand into a second
+ * (remote) deletion at execution time, so the headline alone understates what
+ * Execute will do. Spell the breakdown out rather than leaving the extra
+ * deletions to be discovered afterwards.
+ */
+function buildExecuteConfirmDetail(
+  pending: DeletionQueueItem[],
+  cfg: ReturnType<typeof getCfg>
+): string | undefined {
+  const locals = pending.filter(q => q.kind === 'local').length;
+  const remotes = pending.filter(q => q.kind === 'remote').length;
+  // "Up to", not exactly: an expansion is skipped when the local delete fails,
+  // the counterpart is protected, or it is already queued explicitly.
+  const expanding = cfg.allowRemoteBranchDeletion
+    ? pending.filter(q => q.kind === 'local' && q.includeRemote).length
+    : 0;
+
+  const lines: string[] = [];
+  if (locals > 0) {
+    lines.push(vscode.l10n.t('Local branches: {0}', locals));
+  }
+  if (remotes > 0) {
+    lines.push(vscode.l10n.t('Remote branches: {0}', remotes));
+  }
+  if (expanding > 0) {
+    lines.push(
+      vscode.l10n.t('Plus up to {0} matching remote branches on the server.', expanding)
+    );
+  }
+  return lines.length > 0 ? lines.join('\n') : undefined;
+}
+
 export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueItem> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -132,7 +166,8 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
     const cfg = getCfg();
     if (cfg.confirmBeforeDelete) {
       const proceed = await confirm(
-        vscode.l10n.t('Delete {0} branches? This cannot be undone.', pending.length)
+        vscode.l10n.t('Delete {0} branches? This cannot be undone.', pending.length),
+        buildExecuteConfirmDetail(pending, cfg)
       );
       if (!proceed) {
         return;
@@ -406,7 +441,11 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
   ): Promise<void> {
     const pendingLocals = this.queue.filter(q => q.status === 'pending' && q.kind === 'local');
     const pendingRemotes = this.queue.filter(q => q.status === 'pending' && q.kind === 'remote');
-    const includeRemoteLocals = pendingLocals.filter(q => q.includeRemote);
+    // Expanding a local into its remote counterpart is a remote deletion like
+    // any other, so it is gated on the same setting as the explicit ones.
+    const includeRemoteLocals = cfg.allowRemoteBranchDeletion
+      ? pendingLocals.filter(q => q.includeRemote)
+      : [];
 
     // Fetch upstream map before any deletion (git removes tracking config on delete)
     const upstreams = includeRemoteLocals.length > 0
@@ -416,6 +455,16 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
     // Delete locals with per-item progress
     const failedLocals: DeletionQueueItem[] = [];
     for (const item of pendingLocals) {
+      // Re-check protection at execution time (parity with retryItem): the
+      // queue stores only names, and the protected list can be edited between
+      // queueing a branch and pressing Execute.
+      if (isProtectedBranch(item.name, cfg.protected)) {
+        item.status = 'failed';
+        item.error = vscode.l10n.t('Protected branches cannot be deleted.');
+        item.errorCause = undefined;
+        this.fireChange();
+        continue;
+      }
       await this.runDeletion(
         item,
         () => deleteLocalBranch(repo.repoRoot, item.name, cfg.forceDeleteLocal),
@@ -514,10 +563,17 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
     // Ask for untracked remotes
     const confirmedUntracked: typeof untrackedRemoteItems = [];
     if (untrackedRemoteItems.length > 0) {
+      // These branches were never tracked locally, so a same-name match on the
+      // remote may well belong to someone else. Name them explicitly instead of
+      // asking for consent to a bare count.
       const ok = await confirm(
         vscode.l10n.t(
           'Also delete {0} remote branches with same name (not tracked)?',
           untrackedRemoteItems.length
+        ),
+        vscode.l10n.t(
+          'These remote branches will be deleted: {0}',
+          untrackedRemoteItems.map(e => e.item.name).join(', ')
         )
       );
       if (ok) {
@@ -536,6 +592,15 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
     ];
 
     for (const explicit of pendingRemotes) {
+      // Parity with retryItem: a queued remote must not outlive the setting
+      // that allowed it to be queued in the first place.
+      if (!cfg.allowRemoteBranchDeletion) {
+        explicit.status = 'failed';
+        explicit.error = vscode.l10n.t('Remote branch deletion is disabled in settings.');
+        explicit.errorCause = undefined;
+        this.fireChange();
+        continue;
+      }
       const parsed = splitRemoteRef(explicit.name);
       if (!parsed) {
         explicit.status = 'failed';
