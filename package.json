@@ -210,7 +210,7 @@
         },
         {
           "command": "gitsouji.switchRepository",
-          "when": "view == gitsouji.deletionQueue",
+          "when": "view == gitsouji.deletionQueue && !gitsouji.queueExecuting",
           "group": "navigation@3"
         }
       ],

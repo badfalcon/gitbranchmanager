@@ -161,6 +161,7 @@
   "Remote branches: {0}": "Remote branches: {0}",
   "Plus up to {0} matching remote branches on the server.": "Plus up to {0} matching remote branches on the server.",
   "Remote branch deletion is disabled in settings.": "Remote branch deletion is disabled in settings.",
+  "The repository was switched, so the deletion queue was cleared.": "The repository was switched, so the deletion queue was cleared.",
   "Open Git Sohji first to set the repository.": "Open Git Sohji first to set the repository.",
   "Deleting branches...": "Deleting branches...",
   "Invalid remote ref: {0}": "Invalid remote ref: {0}",

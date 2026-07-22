@@ -663,14 +663,18 @@ suite('Git functions (mocked)', () => {
   // ========================================
   // detectGoneBranches tests
   // ========================================
+  // NOTE: these mock `git for-each-ref --format '%(refname:short)\t%(upstream:track)'`.
+  // The earlier implementation parsed `git branch -vv`, whose human column layout
+  // splices a worktree path before the tracking bracket; the mocks for it omitted
+  // that path, so they passed against output real git never produces.
   test('detectGoneBranches: detects gone upstream', async () => {
-    // First call: git branch -vv
+    // First call: git for-each-ref
     runGitStub.onFirstCall().resolves({
       stdout: [
-        '* main           abc1234 [origin/main] latest commit',
-        '  old-feature    def5678 [origin/old-feature: gone] old commit',
-        '  another        ghi9012 [origin/another: gone] another old',
-        '  local-only     jkl3456 local branch no upstream',
+        'main\t',
+        'old-feature\t[gone]',
+        'another\t[gone]',
+        'local-only\t',
       ].join('\n'),
     });
     // Second call: getCurrentBranch
@@ -683,18 +687,38 @@ suite('Git functions (mocked)', () => {
     assert.ok(gone.includes('another'));
   });
 
-  test('detectGoneBranches: detects gone branch checked out in another worktree (+)', async () => {
+  test('detectGoneBranches: reads for-each-ref, not the human-formatted branch -vv', async () => {
+    runGitStub.onFirstCall().resolves({ stdout: 'wt-feature\t[gone]\n' });
+    runGitStub.onSecondCall().resolves({ stdout: 'main\n' });
+
+    const gone = await detectGoneBranches('/fake/repo');
+
+    assert.deepStrictEqual(gone, ['wt-feature']);
+    // A branch checked out in a linked worktree renders in `branch -vv` as
+    // "+ wt-feature def5678 (/path/to/wt) [origin/wt-feature: gone] subject",
+    // which no bracket-anchored regex matches. for-each-ref has no such layout.
+    const args = runGitStub.firstCall.args[1] as string[];
+    assert.strictEqual(args[0], 'for-each-ref');
+    assert.ok(
+      args.some(a => a.includes('%(upstream:track)')),
+      `expected the track field in the format, got: ${args.join(' ')}`
+    );
+  });
+
+  test('detectGoneBranches: ahead/behind tracking is not mistaken for gone', async () => {
     runGitStub.onFirstCall().resolves({
       stdout: [
-        '* main        abc1234 [origin/main] latest',
-        '+ wt-feature  def5678 [origin/wt-feature: gone] old commit',
+        'ahead-only\t[ahead 2]',
+        'behind-only\t[behind 1]',
+        'diverged\t[ahead 1, behind 2]',
+        'really-gone\t[gone]',
       ].join('\n'),
     });
     runGitStub.onSecondCall().resolves({ stdout: 'main\n' });
 
     const gone = await detectGoneBranches('/fake/repo');
 
-    assert.deepStrictEqual(gone, ['wt-feature']);
+    assert.deepStrictEqual(gone, ['really-gone']);
   });
 
   // ========================================
@@ -732,21 +756,24 @@ suite('Git functions (mocked)', () => {
   test('getRemoteBranchLastCommitDates: filters HEAD', async () => {
     const now = new Date();
 
+    // Real git: %(refname:short) collapses refs/remotes/origin/HEAD to bare
+    // "origin", so the HEAD pointer must be recognised from %(refname).
     runGitStub.resolves({
       stdout: [
-        `origin/main\t${now.toISOString()}\tAlice`,
-        `origin/HEAD\t${now.toISOString()}\tAlice`,
-        `origin/feature\t${now.toISOString()}\tCarol`,
+        `refs/remotes/origin/main\torigin/main\t${now.toISOString()}\tAlice`,
+        `refs/remotes/origin/HEAD\torigin\t${now.toISOString()}\tAlice`,
+        `refs/remotes/origin/feature\torigin/feature\t${now.toISOString()}\tCarol`,
       ].join('\n'),
     });
 
     const dates = await getRemoteBranchLastCommitDates('/fake/repo');
 
-    // HEAD should be filtered out
+    // HEAD should be filtered out — and must not leak in as a bare "origin"
     assert.strictEqual(dates.size, 2);
     assert.ok(dates.has('origin/main'));
     assert.ok(dates.has('origin/feature'));
     assert.ok(!dates.has('origin/HEAD'));
+    assert.ok(!dates.has('origin'), 'the HEAD pointer must not appear as bare "origin"');
     const featureInfo = dates.get('origin/feature');
     assert.ok(featureInfo);
     assert.strictEqual(featureInfo.author, 'Carol');
@@ -783,23 +810,38 @@ suite('Git functions (mocked)', () => {
   // detectMergedRemoteBranches tests
   // ========================================
   test('detectMergedRemoteBranches: detects merged remotes', async () => {
+    // Real `git branch -r` prints the symbolic ref with an arrow, not bare.
     runGitStub.resolves({
       stdout: [
+        '  origin/HEAD -> origin/main',
         '  origin/main',
         '  origin/feature-merged',
-        '  origin/HEAD',
         '  origin/another-merged',
       ].join('\n'),
     });
 
     const merged = await detectMergedRemoteBranches('/fake/repo', 'main');
 
-    // Should exclude HEAD and the base branch itself
+    // Should exclude the HEAD pointer and the base branch itself
     assert.strictEqual(merged.size, 2);
     assert.ok(merged.has('origin/feature-merged'));
     assert.ok(merged.has('origin/another-merged'));
-    assert.ok(!merged.has('origin/HEAD'));
+    assert.ok(
+      !merged.has('origin/HEAD -> origin/main'),
+      'the symbolic-ref line must not be added as if it were a branch'
+    );
     assert.ok(!merged.has('origin/main'));
+  });
+
+  test('detectMergedRemoteBranches: another remote\'s base branch is not a candidate', async () => {
+    runGitStub.resolves({
+      stdout: ['  origin/main', '  fork/main', '  fork/feature-merged'].join('\n'),
+    });
+
+    const merged = await detectMergedRemoteBranches('/fake/repo', 'main');
+
+    // fork/main is that remote's base branch, deliberately withheld from cleanup
+    assert.deepStrictEqual([...merged].sort(), ['fork/feature-merged']);
   });
 
   // ========================================
@@ -1097,6 +1139,14 @@ suite('Git functions (mocked)', () => {
             stdout: ['main\taaa', 'feature\tbbb', 'gone-branch\tccc'].join('\n'),
           });
         }
+        // detectGoneBranches: name + upstream track. Must match the exact field:
+        // listLocalBranches' format contains %(upstream:trackshort), which a
+        // bare 'upstream:track' substring test would also swallow.
+        if (args[2].includes('%(upstream:track)')) {
+          return Promise.resolve({
+            stdout: ['main\t', 'feature\t', 'gone-branch\t[gone]'].join('\n'),
+          });
+        }
         // Regular branch listing
         return Promise.resolve({
           stdout: [
@@ -1113,16 +1163,6 @@ suite('Git functions (mocked)', () => {
       // detectDeadBranches: branch --merged
       if (args[0] === 'branch' && args[1] === '--merged') {
         return Promise.resolve({ stdout: '  main\n  feature\n' });
-      }
-      // detectGoneBranches: branch -vv
-      if (args[0] === 'branch' && args[1] === '-vv') {
-        return Promise.resolve({
-          stdout: [
-            '* main         abc123 [origin/main] commit',
-            '  feature      def456 no upstream',
-            '  gone-branch  ghi789 [origin/gone-branch: gone] old commit',
-          ].join('\n'),
-        });
       }
       // getCurrentBranch: rev-parse --abbrev-ref HEAD
       if (args[0] === 'rev-parse') {
@@ -1253,11 +1293,14 @@ suite('Git functions (mocked)', () => {
       if (args[0] === 'for-each-ref' && args[3] === 'refs/remotes') {
         // Check if it's for commit dates
         if (args[2].includes('committerdate')) {
+          // Leading %(refname) — %(refname:short) renders the HEAD pointer as
+          // bare "origin", so only the full ref identifies it.
           return Promise.resolve({
             stdout: [
-              `origin/main\t${now.toISOString()}\tAlice`,
-              `origin/feature\t${fortyDaysAgo.toISOString()}\tBob`,
-              `origin/recent\t${now.toISOString()}\tCarol`,
+              `refs/remotes/origin/main\torigin/main\t${now.toISOString()}\tAlice`,
+              `refs/remotes/origin/feature\torigin/feature\t${fortyDaysAgo.toISOString()}\tBob`,
+              `refs/remotes/origin/recent\torigin/recent\t${now.toISOString()}\tCarol`,
+              `refs/remotes/origin/HEAD\torigin\t${now.toISOString()}\tAlice`,
             ].join('\n'),
           });
         }
@@ -1267,14 +1310,14 @@ suite('Git functions (mocked)', () => {
             'refs/remotes/origin/main\torigin/main',
             'refs/remotes/origin/feature\torigin/feature',
             'refs/remotes/origin/recent\torigin/recent',
-            'refs/remotes/origin/HEAD\torigin/HEAD',
+            'refs/remotes/origin/HEAD\torigin',
           ].join('\n'),
         });
       }
       // detectMergedRemoteBranches: branch -r --merged
       if (args[0] === 'branch' && args[1] === '-r') {
         return Promise.resolve({
-          stdout: '  origin/main\n  origin/feature\n',
+          stdout: '  origin/HEAD -> origin/main\n  origin/main\n  origin/feature\n',
         });
       }
       return Promise.resolve({ stdout: '' });
