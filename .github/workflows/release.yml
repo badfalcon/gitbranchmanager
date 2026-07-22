@@ -49,15 +49,27 @@ jobs:
       - name: Extract release notes
         run: node scripts/lib/changelog.mjs extract "${VERSION}" > release-notes.md
 
+      # The two publish steps are independent: a failure in one must not stop the
+      # other, nor the GitHub release. The summary step at the end fails the job
+      # so a partial release is still reported as a failure.
       - name: Publish to the VS Code Marketplace
+        id: marketplace
+        continue-on-error: true
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: npx vsce publish --packagePath "gitsouji-${VERSION}.vsix"
 
       - name: Publish to Open VSX
+        id: openvsx
+        continue-on-error: true
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
-        run: npx ovsx publish "gitsouji-${VERSION}.vsix"
+        run: |
+          PUBLISHER="$(node -p "require('./package.json').publisher")"
+          # First publish for a publisher needs the namespace; creating an
+          # existing one is an error we deliberately ignore.
+          npx ovsx create-namespace "$PUBLISHER" || echo "namespace $PUBLISHER already exists, continuing"
+          npx ovsx publish "gitsouji-${VERSION}.vsix"
 
       - name: Create the GitHub release
         uses: softprops/action-gh-release@v2
@@ -65,3 +77,13 @@ jobs:
           name: ${{ github.ref_name }}
           body_path: release-notes.md
           files: gitsouji-${{ env.VERSION }}.vsix
+
+      - name: Report the publish results
+        if: always()
+        run: |
+          echo "VS Code Marketplace: ${{ steps.marketplace.outcome }}"
+          echo "Open VSX:            ${{ steps.openvsx.outcome }}"
+          if [ "${{ steps.marketplace.outcome }}" = "failure" ] || [ "${{ steps.openvsx.outcome }}" = "failure" ]; then
+            echo "::error::a publish step failed; see its step log and republish that registry by hand"
+            exit 1
+          fi
