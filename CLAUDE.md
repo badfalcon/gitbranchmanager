@@ -232,17 +232,26 @@ Two-way message flow between extension and webview:
 
 ## Testing
 
-Tests are in [src/test/extension.test.ts](src/test/extension.test.ts) using Mocha + Assert + Sinon:
+Three suites, all run by `npm test` (Mocha + Assert + Sinon inside the VS Code test host):
 
-**Pure function tests (18 tests):**
-- `isProtectedBranch()` - exact, prefix, glob, case sensitivity, special chars
-- `parseTrackShort()` - ahead/behind parsing, edge cases
-- `escapeHtml()` - HTML entity escaping, XSS prevention
-- `simpleBranchNameValidator()` - invalid chars, patterns, edge cases
+**[src/test/extension.test.ts](src/test/extension.test.ts)** — pure functions (`isProtectedBranch`, `parseTrackShort`, `escapeHtml`, `simpleBranchNameValidator`, `classifyDeletionCause` / `resolveDeletionCause`, `splitRemoteRef`) plus git functions with `runGit()` stubbed.
 
-**Git function tests with mocking (30 tests):**
-- Uses `sinon` to stub `runGit()` for isolated unit tests
-- Tests for: `listLocalBranches`, `listRemoteBranches`, `getCurrentBranch`, `checkoutBranch`, `createBranch`, `renameBranch`, `deleteLocalBranch`, `deleteRemoteBranch`, `mergeIntoCurrent`, `fetchWithPrune`, `resolveBaseBranch`, `getUpstreamMap`, `detectDeadBranches`, `detectGoneBranches`, `detectStaleBranches`, `detectMergedRemoteBranches`, `getBranchLastCommitDates`, `getRemoteBranchLastCommitDates`, `listLocalBranchesWithStatus`, `listRemoteBranchesWithStatus`
+**[src/test/queue.test.ts](src/test/queue.test.ts)** — `QueueTreeProvider` behavior: the batch force-delete prompt, and execute-time revalidation (protection, `allowRemoteBranchDeletion`, repository switches mid-batch). Stubs `runGit`, `getCfg`, and `confirm`.
+
+**[src/test/integration.test.ts](src/test/integration.test.ts)** — runs against **real git repositories**; nothing is stubbed. The fixture builds a linked worktree, a second remote, `origin/HEAD`, gone/merged/stale branches and backdated commits in a temp dir.
+
+> **Why the integration suite exists — read before adding a mocked parsing test.**
+> A mock encodes an assumption about git's output. If the parsing code holds the
+> *same* wrong assumption, the test passes and confirms the bug. This is not
+> hypothetical: a test named "detects gone branch checked out in another
+> worktree" passed for a long time while the feature was broken, because the
+> mock omitted the `(worktree path)` that real `git branch -vv` prints before
+> the tracking bracket. **Any change to git-output parsing needs an integration
+> test, not just a mocked one.** When you do write a mock, paste output you
+> actually captured from git rather than output you expect it to produce.
+
+Mocked suites are milliseconds; the integration suite spawns real git (~20s), so
+the mocha timeout is raised in [.vscode-test.mjs](.vscode-test.mjs).
 
 ```bash
 # Run all tests (auto-compiles and lints first)
@@ -250,6 +259,10 @@ npm test
 
 # Run specific test by pattern (requires compiled tests)
 npm run compile-tests && npx vscode-test --grep "isProtectedBranch"
+
+# Rebuild the manual-verification repo (worktree + second remote + gone/stale
+# branches) under .test/, then F5 and open .test/repo
+bash scripts/setup-test-repo.sh
 ```
 
 ## Localization (i18n)

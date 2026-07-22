@@ -30,6 +30,11 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 REPO="$PROJECT_ROOT/.test/repo"
 REMOTE="$PROJECT_ROOT/.test/remote.git"
+# A second remote and a linked worktree: the two setups where real bugs hid
+# (gone-detection skipped worktree branches; the base branch on a second remote
+# is withheld from remote cleanup). Without them the harness cannot reproduce.
+FORK="$PROJECT_ROOT/.test/fork.git"
+WORKTREE="$PROJECT_ROOT/.test/worktree-gone"
 
 # Authors (name <email>) used across branches to exercise the Author column,
 # including a CJK name, an accented name, and a very long name (ellipsis).
@@ -46,8 +51,15 @@ echo ">>> wiping $REPO"
 rm -rf "$REPO"
 echo ">>> wiping $REMOTE"
 rm -rf "$REMOTE"
+echo ">>> wiping $FORK"
+rm -rf "$FORK"
+# Wipe the worktree directory too: it lives outside $REPO, so removing the repo
+# alone would leave an orphan that blocks `git worktree add` on the next run.
+echo ">>> wiping $WORKTREE"
+rm -rf "$WORKTREE"
 
 git init -q --bare -b main "$REMOTE"
+git init -q --bare -b main "$FORK"
 git init -q -b main "$REPO"
 cd "$REPO"
 git config user.name "Test User"
@@ -144,6 +156,21 @@ git fetch -q --prune origin
 
 git checkout -q main
 
+# --- second remote: carries the base branch name plus a shared branch ---
+# `fork/main` must NOT be offered as a remote cleanup candidate (it is that
+# remote's base branch), while `fork/shared-work` should be.
+git remote add fork "$FORK"
+git push -q fork main:refs/heads/main
+git push -q fork main:refs/heads/shared-work
+git fetch -q fork
+
+# --- linked worktree holding a gone branch ---
+# In `git branch -vv` this renders as
+#   + gone/wip-3 abc1234 (<path>) [origin/gone/wip-3: gone] wip
+# with the worktree path spliced in before the tracking bracket. Gone-detection
+# reads %(upstream:track) from for-each-ref precisely so this still resolves.
+git worktree add -q "$WORKTREE" gone/wip-3
+
 echo
 echo "=== local branches (name -> author) ==="
 git for-each-ref --sort=refname --format='%(refname:short)	%(authorname)' refs/heads
@@ -151,7 +178,17 @@ echo
 echo "=== remote-tracking branches (name -> author) ==="
 git for-each-ref --sort=refname --format='%(refname:short)	%(authorname)' refs/remotes
 echo
-echo "=== gone branches ==="
-git branch -vv | grep ': gone]' || echo "(none)"
+echo "=== gone branches (as the extension detects them) ==="
+# Same source the extension uses: `git branch -vv` is column-formatted and
+# splices the worktree path before the bracket, so grepping it under-reports.
+git for-each-ref --format='%(refname:short)	%(upstream:track)' refs/heads \
+  | grep '\[gone\]' || echo "(none)"
 echo
-echo ">>> done. Repo: $REPO   Remote: $REMOTE"
+echo "=== worktrees ==="
+git worktree list
+echo
+echo ">>> done."
+echo "    Repo:     $REPO"
+echo "    Remote:   $REMOTE  (origin)"
+echo "    Fork:     $FORK  (fork)"
+echo "    Worktree: $WORKTREE"

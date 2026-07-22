@@ -275,6 +275,16 @@ export async function openManagerPanel(
 
           case 'deleteRemote': {
             const cfg = getCfg();
+            // Parity with the queue (queueTreeProvider's retry/execute paths):
+            // the webview hides the button when the setting is off, but a
+            // message can still arrive from a table rendered before the setting
+            // changed — the refresh that re-renders it is async.
+            if (!cfg.allowRemoteBranchDeletion) {
+              vscode.window.showWarningMessage(
+                vscode.l10n.t('Remote branch deletion is disabled in settings.')
+              );
+              break;
+            }
             if (isProtectedBranch(msg.name, cfg.protected)) {
               vscode.window.showWarningMessage(
                 vscode.l10n.t('Protected branches cannot be deleted remotely.')
@@ -417,18 +427,36 @@ async function handleRemoteDeleteFailure(
 }
 
 let logTerminal: vscode.Terminal | undefined;
-let logTerminalCwd: string | undefined;
 
+/**
+ * Show `git log` for a ref in a terminal.
+ *
+ * SECURITY: the ref is passed as an argv entry — never interpolated into a
+ * command string for a shell to parse. Git permits `$`, backtick, `;`, `&` and
+ * quotes in branch names (only space, `~ ^ : ? * [ \` and control characters
+ * are rejected), so a branch fetched from an untrusted remote can carry a shell
+ * payload. The previous implementation built a string with JSON.stringify —
+ * which escapes for JSON, not for any shell — and handed it to
+ * `Terminal.sendText`, which also submits it. Under PowerShell (the Windows
+ * default) `"x$(whoami)y"` performs command substitution, so merely clicking
+ * **Log** on a branch named `x$(...)y` executed its contents.
+ *
+ * `shellPath`/`shellArgs` launches git directly with an argument vector, so no
+ * shell ever parses the ref. The trade-off is that a terminal started this way
+ * cannot be fed a second command, so the previous one is disposed rather than
+ * reused — the user still sees a single "Git Log" terminal at a time.
+ */
 function openLogInTerminal(cwd: string, ref: string) {
-  // Reuse one "Git Log" terminal instead of spawning a new one on every click.
-  if (!logTerminal || logTerminal.exitStatus !== undefined || logTerminalCwd !== cwd) {
-    logTerminal = vscode.window.createTerminal({ cwd, name: vscode.l10n.t('Git Log') });
-    logTerminalCwd = cwd;
-  }
+  logTerminal?.dispose();
+  logTerminal = vscode.window.createTerminal({
+    cwd,
+    name: vscode.l10n.t('Git Log'),
+    shellPath: 'git',
+    // The ref must come before `--`; `git log -- <ref>` would treat <ref> as a
+    // pathspec and show the wrong (usually empty) history.
+    shellArgs: ['log', '--oneline', '--graph', '--decorate', ref, '--'],
+  });
   logTerminal.show();
-  // The ref must come before `--`; `git log -- <ref>` would treat <ref> as a
-  // pathspec and show the wrong (usually empty) history.
-  logTerminal.sendText(`git log --oneline --graph --decorate ${JSON.stringify(ref)} --`);
 }
 
 type WebviewI18n = {

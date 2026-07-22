@@ -25,7 +25,21 @@ export async function activate(context: vscode.ExtensionContext) {
 
   async function getCachedRepo(): Promise<RepoContext | undefined> {
     const cached = context.workspaceState.get<string>(LAST_REPO_KEY);
-    if (cached && (await isGitRepository(cached))) {
+    if (!cached) {
+      return undefined;
+    }
+    // workspaceState is scoped to the whole workspace, not to a folder, so the
+    // cached root can outlive the folder being removed from a multi-root
+    // workspace. "Still a git repo on disk" is not enough — without this the
+    // panel would silently reopen against the removed folder and every
+    // checkout / rename / delete would target the wrong repository.
+    const inWorkspace = (vscode.workspace.workspaceFolders ?? []).some(
+      (f) => f.uri.fsPath === cached
+    );
+    if (!inWorkspace) {
+      return undefined;
+    }
+    if (await isGitRepository(cached)) {
       return { repoRoot: cached };
     }
     return undefined;
