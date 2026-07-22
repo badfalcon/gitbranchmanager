@@ -1,5 +1,7 @@
 # [Unreleased]
 
+# [1.7.1] - 2026-07-22
+
 ## Security
 
 - **A branch name could execute commands via the Log action.** The `git log` command was assembled as a string with `JSON.stringify` — which escapes for JSON, not for any shell — and submitted to a terminal. Git permits `$`, backticks, `;` and `&` in branch names (only space, `~ ^ : ? * [ \` and control characters are rejected), so under PowerShell, the Windows default, clicking **Log** on a branch named `x$(...)y` ran its contents. A malicious branch name fetched from an untrusted remote was enough; no confirmation was involved. The ref is now passed to git as an argument vector, so no shell ever parses it
