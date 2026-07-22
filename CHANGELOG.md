@@ -1,5 +1,9 @@
 # [Unreleased]
 
+## Security
+
+- **A branch name could execute commands via the Log action.** The `git log` command was assembled as a string with `JSON.stringify` — which escapes for JSON, not for any shell — and submitted to a terminal. Git permits `$`, backticks, `;` and `&` in branch names (only space, `~ ^ : ? * [ \` and control characters are rejected), so under PowerShell, the Windows default, clicking **Log** on a branch named `x$(...)y` ran its contents. A malicious branch name fetched from an untrusted remote was enough; no confirmation was involved. The ref is now passed to git as an argument vector, so no shell ever parses it
+
 ## Fixed
 
 - **Protected branches could be deleted by the deletion queue.** The queue stores only branch names, so a branch queued before the `protectedBranches` list was edited (e.g. adding `release/*`) was still deleted by **Execute**. Execute now re-checks protection per item, matching what single retries already did
@@ -8,12 +12,15 @@
 - **Branches checked out in a linked worktree were never detected as "gone".** Detection parsed `git branch -vv`, whose human column layout inserts the worktree path between the commit SHA and the tracking bracket (`+ feat a4377dd (/path/wt) [origin/feat: gone] subject`), so those lines matched nothing. Detection now reads the machine-readable `%(upstream:track)` field from `git for-each-ref`
 - The remote HEAD pointer was not filtered where git's real output differs from what the code expected: `git branch -r` prints it as `origin/HEAD -> origin/main` (never matching a `/HEAD` suffix test), and `%(refname:short)` renders it as bare `origin`. Both put phantom entries into internal lookup tables
 - A rare race let a second batch start while **Switch & Delete** was still resolving the base branch, running two deletion flows at once
+- The single-row **Delete Remote** action did not re-check `allowRemoteBranchDeletion`; the setting was enforced only by the webview hiding the button, leaving a window after the setting changed but before the table re-rendered. It is now checked where the deletion happens, as the queue already did
+- In a multi-root workspace, removing the folder Git Sohji last worked on no longer makes it silently reopen against that removed folder — the remembered repository must still be part of the workspace
 
 ## Changed
 
 - The confirmation for deleting untracked same-name remote branches now lists the branches instead of only their count — these were never tracked locally, so a same-name match on the server may belong to someone else
 - The batch confirmation now breaks down what will actually be deleted (local / remote counts, plus any remote branches added by "also delete remote"), instead of showing a single count that excluded the remote expansions
 - Re-sorting the cleanup preview no longer redraws a partially-checked "select all" as unchecked — a single click to re-check everything could silently restore branches you had deliberately excluded
+- The **Log** action now starts a fresh "Git Log" terminal each time instead of reusing one. A terminal launched with an argument vector (needed to keep branch names away from the shell) cannot be sent a second command; the previous terminal is closed, so only one is ever open
 
 # [1.7.0] - 2026-07-22
 
