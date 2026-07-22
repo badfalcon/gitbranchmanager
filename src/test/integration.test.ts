@@ -69,12 +69,20 @@ suite('Integration (real git)', () => {
     repo = path.join(root, 'work');
     worktree = path.join(root, 'wt-gone');
 
-    await git(root, ['init', '-q', '--bare', 'remote.git']);
-    await git(root, ['init', '-q', '--bare', 'fork.git']);
+    // -b main on the bare remotes too, not just the work repo: without it their
+    // HEAD follows the ambient init.defaultBranch, which is unset on CI. HEAD
+    // then points at refs/heads/master, a branch this fixture never creates, and
+    // `git remote set-head origin -a` below fails with "Cannot determine remote
+    // HEAD". Nothing here may depend on the machine's git configuration.
+    await git(root, ['init', '-q', '--bare', '-b', 'main', 'remote.git']);
+    await git(root, ['init', '-q', '--bare', '-b', 'main', 'fork.git']);
     await git(root, ['init', '-q', '-b', 'main', 'work']);
 
     await git(repo, ['config', 'user.email', 'test@example.com']);
     await git(repo, ['config', 'user.name', 'Test User']);
+    // A contributor with commit signing enabled globally would otherwise fail
+    // every commit here (setup-test-repo.sh does the same).
+    await git(repo, ['config', 'commit.gpgsign', 'false']);
     await git(repo, ['remote', 'add', 'origin', path.join(root, 'remote.git')]);
     await git(repo, ['remote', 'add', 'fork', path.join(root, 'fork.git')]);
 
