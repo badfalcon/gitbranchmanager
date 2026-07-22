@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify the tag matches package.json
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "tag $GITHUB_REF_NAME does not match package.json version $PKG_VERSION" >&2
+            exit 1
+          fi
+          echo "VERSION=$PKG_VERSION" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test release scripts
+        run: npm run test:scripts
+
+      - name: Test extension
+        run: xvfb-run -a npm test
+
+      - name: Package extension
+        run: npx vsce package --out "gitsouji-${VERSION}.vsix"
+
+      - name: Upload vsix artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: gitsouji-${{ env.VERSION }}.vsix
+          path: gitsouji-${{ env.VERSION }}.vsix
+
+      - name: Extract release notes
+        run: node scripts/lib/changelog.mjs extract "${VERSION}" > release-notes.md
+
+      - name: Publish to the VS Code Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx vsce publish --packagePath "gitsouji-${VERSION}.vsix"
+
+      - name: Publish to Open VSX
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: npx ovsx publish "gitsouji-${VERSION}.vsix"
+
+      - name: Create the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body_path: release-notes.md
+          files: gitsouji-${{ env.VERSION }}.vsix
