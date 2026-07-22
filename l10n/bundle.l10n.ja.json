@@ -161,6 +161,7 @@
   "Remote branches: {0}": "リモートブランチ: {0} 件",
   "Plus up to {0} matching remote branches on the server.": "さらに、対応するリモートブランチを最大 {0} 件削除します。",
   "Remote branch deletion is disabled in settings.": "リモートブランチの削除は設定で無効になっています",
+  "The repository was switched, so the deletion queue was cleared.": "リポジトリが切り替わったため、削除キューをクリアしました",
   "Open Git Sohji first to set the repository.": "先に Git Sohji を開いてリポジトリを設定してください。",
   "Deleting branches...": "ブランチを削除中...",
   "Invalid remote ref: {0}": "無効なリモート参照: {0}",

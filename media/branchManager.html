@@ -740,6 +740,16 @@ tr.row-selectable:hover { background: var(--vscode-list-hoverBackground); }
       table.insertAdjacentHTML('beforeend', header);
       wireSortableHeaders(table);
 
+      // `indeterminate` is a JS property, so the markup above can only ever
+      // render checked/unchecked. Without this, re-sorting a partially checked
+      // preview redraws select-all as plain *unchecked*, and one click to
+      // "re-check everything" silently restores branches the user had excluded.
+      syncSelectAllState(
+        $('selectAll'),
+        sortedCandidates.length,
+        sortedCandidates.filter(b => previewSelected.has(b.short)).length
+      );
+
       $('selectAll').addEventListener('change', (e) => {
         const on = e.target.checked;
         table.querySelectorAll('input[type="checkbox"][data-branch]').forEach(cb => {

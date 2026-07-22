@@ -65,21 +65,50 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
   private queue: DeletionQueueItem[] = [];
   private repo?: RepoContext;
   private executing = false;
+  private repoSwitchedWhileExecuting = false;
   private onAfterExecute?: () => Promise<void> | void;
 
   setRepo(repo: RepoContext): void {
-    // Don't drop the queue mid-execution: runExecution mutates and reads
-    // this.queue, so replacing it with [] would corrupt an in-flight batch.
-    if (
-      !this.executing &&
-      this.repo &&
-      this.repo.repoRoot !== repo.repoRoot &&
-      this.queue.length > 0
-    ) {
-      this.queue = [];
+    const switched = !!this.repo && this.repo.repoRoot !== repo.repoRoot && this.queue.length > 0;
+    if (switched) {
+      if (this.executing) {
+        // Don't drop the queue mid-execution: runExecution mutates and reads
+        // this.queue, so replacing it with [] would corrupt an in-flight batch.
+        // Defer to endExecution() instead — the queue must NOT outlive the
+        // repository it was built for, because this.repo has already moved on
+        // and a later retry would delete a same-named branch in the wrong repo.
+        this.repoSwitchedWhileExecuting = true;
+      } else {
+        this.queue = [];
+      }
     }
     this.repo = repo;
     this.fireChange();
+  }
+
+  /**
+   * Shared teardown for every execution entry point (batch and single-item
+   * retries). Releases the executing flag, applies a repository switch that
+   * had to be deferred, and runs the post-execute refresh hook.
+   */
+  private async endExecution(): Promise<void> {
+    this.executing = false;
+    void vscode.commands.executeCommand('setContext', QUEUE_EXECUTING_CONTEXT, false);
+    if (this.repoSwitchedWhileExecuting) {
+      this.repoSwitchedWhileExecuting = false;
+      this.queue = [];
+      vscode.window.showInformationMessage(
+        vscode.l10n.t('The repository was switched, so the deletion queue was cleared.')
+      );
+    }
+    this.fireChange();
+    if (this.onAfterExecute) {
+      try {
+        await this.onAfterExecute();
+      } catch {
+        // ignore refresh errors
+      }
+    }
   }
 
   setPostExecuteHook(hook: () => Promise<void> | void): void {
@@ -188,16 +217,7 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
         (progress) => this.runExecution(repo, cfg, progress)
       );
     } finally {
-      this.executing = false;
-      void vscode.commands.executeCommand('setContext', QUEUE_EXECUTING_CONTEXT, false);
-      this.fireChange();
-      if (this.onAfterExecute) {
-        try {
-          await this.onAfterExecute();
-        } catch {
-          // ignore refresh errors
-        }
-      }
+      await this.endExecution();
     }
   }
 
@@ -283,16 +303,7 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
         }
       );
     } finally {
-      this.executing = false;
-      void vscode.commands.executeCommand('setContext', QUEUE_EXECUTING_CONTEXT, false);
-      this.fireChange();
-      if (this.onAfterExecute) {
-        try {
-          await this.onAfterExecute();
-        } catch {
-          // ignore refresh errors
-        }
-      }
+      await this.endExecution();
     }
   }
 
@@ -326,19 +337,23 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
     }
 
     const repo = this.repo;
-    // Shared with the panel's single-delete recovery: resolves the base,
-    // refuses a self-switch, and always confirms (regardless of
-    // confirmBeforeDelete — this changes the user's checked-out branch as a
-    // side effect, not just deletes one).
-    const base = await confirmSwitchAwayTarget(repo.repoRoot, item.name);
-    if (!base) {
-      return;
-    }
-
+    // Claim the flag BEFORE resolving the base branch. Unlike the other entry
+    // points, whose only pre-flag await is a workbench-blocking modal, this one
+    // runs real git commands first — leaving a window in which execute() sails
+    // past its own `if (this.executing)` guard and starts a concurrent batch.
     this.executing = true;
     void vscode.commands.executeCommand('setContext', QUEUE_EXECUTING_CONTEXT, true);
 
     try {
+      // Shared with the panel's single-delete recovery: resolves the base,
+      // refuses a self-switch, and always confirms (regardless of
+      // confirmBeforeDelete — this changes the user's checked-out branch as a
+      // side effect, not just deletes one).
+      const base = await confirmSwitchAwayTarget(repo.repoRoot, item.name);
+      if (!base) {
+        return;
+      }
+
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Window,
@@ -362,16 +377,7 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
         }
       );
     } finally {
-      this.executing = false;
-      void vscode.commands.executeCommand('setContext', QUEUE_EXECUTING_CONTEXT, false);
-      this.fireChange();
-      if (this.onAfterExecute) {
-        try {
-          await this.onAfterExecute();
-        } catch {
-          // ignore refresh errors
-        }
-      }
+      await this.endExecution();
     }
   }
 
@@ -421,16 +427,7 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<DeletionQueueI
     } catch (err) {
       vscode.window.showWarningMessage(err instanceof Error ? err.message : String(err));
     } finally {
-      this.executing = false;
-      void vscode.commands.executeCommand('setContext', QUEUE_EXECUTING_CONTEXT, false);
-      this.fireChange();
-      if (this.onAfterExecute) {
-        try {
-          await this.onAfterExecute();
-        } catch {
-          // ignore refresh errors
-        }
-      }
+      await this.endExecution();
     }
   }
 

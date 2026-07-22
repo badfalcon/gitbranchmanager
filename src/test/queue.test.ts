@@ -248,6 +248,50 @@ suite('QueueTreeProvider execute-time revalidation', () => {
     );
   });
 
+  test('a repository switch during execution does not leave the queue bound to the old repo', async () => {
+    // "Switch Repository" is reachable mid-batch (command palette at minimum).
+    // setRepo cannot clear the queue in-flight, so it must be cleared on the way
+    // out — otherwise this.repo points at repo B while the items still name repo
+    // A's branches, and a retry would delete a same-named branch in repo B.
+    warningStub.resolves(undefined); // decline the force-delete offer
+    const provider = makeProvider([{ name: 'feature/login', kind: 'local' }]);
+    const staleRef = provider.getChildren()[0];
+
+    runGitStub.callsFake(async (_cwd: string, args: string[]) => {
+      if (args[0] === 'branch' && args[1] === '-d') {
+        provider.setRepo({ repoRoot: '/repo-b' }); // user switches mid-batch
+        throw new gitRunner.GitError(
+          `git branch -d -- feature/login failed: Command failed: git branch -d -- feature/login\n` +
+            `error: The branch 'feature/login' is not fully merged.`,
+          args,
+          '/fake/repo'
+        );
+      }
+      if (args[0] === 'rev-parse') {
+        return { stdout: 'main\n' };
+      }
+      return { stdout: '' };
+    });
+
+    await provider.execute();
+
+    // The in-flight deletion still ran against the repo it was started for
+    assert.ok(
+      runGitStub.getCalls().every(c => c.args[0] !== '/repo-b'),
+      'the in-flight batch must not follow the switch'
+    );
+    assert.deepStrictEqual(provider.getChildren(), [], 'queue must be cleared after the switch');
+
+    // A stale reference (e.g. a menu action resolved before the clear) is inert
+    runGitStub.resetHistory();
+    await provider.retryItem(staleRef, false);
+    assert.deepStrictEqual(
+      runGitStub.getCalls().map(c => c.args[1]),
+      [],
+      'retrying an item no longer in the queue must run no git command'
+    );
+  });
+
   test('the batch confirmation breaks down what will actually be deleted', async () => {
     useCfg({ allowRemoteBranchDeletion: true });
     confirmStub.resolves(false); // cancel — we only care about the prompt

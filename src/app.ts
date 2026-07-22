@@ -795,22 +795,29 @@ export async function detectStaleBranches(cwd: string, staleDays: number): Promi
  * Parses `git branch -vv` output looking for [origin/xxx: gone] pattern.
  */
 export async function detectGoneBranches(cwd: string): Promise<string[]> {
-  const { stdout } = await runGit(cwd, ['branch', '-vv']);
+  // Deliberately NOT `git branch -vv`: that output is column-formatted for
+  // humans and splices a worktree path in between the SHA and the tracking
+  // bracket for any branch checked out in a linked worktree —
+  //   "+ feat a4377dd (C:/path/wt-feat) [origin/feat: gone] subject"
+  // — which defeats any regex anchored on the bracket, and the trailing commit
+  // subject can imitate the bracket. `for-each-ref` exposes the same fact as one
+  // machine-readable field, with no formatting to parse around.
+  const fmt = '%(refname:short)\t%(upstream:track)';
+  const { stdout } = await runGit(cwd, ['for-each-ref', '--format', fmt, 'refs/heads']);
   const current = await getCurrentBranch(cwd);
   const cfg = getCfg();
 
   const gone: string[] = [];
-  // Match patterns like: "  branch-name abc1234 [origin/branch-name: gone] commit message"
-  // Leading marker may be `*` (current) or `+` (checked out in another worktree).
-  const goneRegex = /^[*+]?\s+(\S+)\s+\S+\s+\[[^\]]+:\s*gone\]/;
-
   for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
-    const match = line.match(goneRegex);
-    if (match) {
-      const name = match[1];
-      if (name !== current && !isProtectedBranch(name, cfg.protected)) {
-        gone.push(name);
-      }
+    const [name, track] = line.split('\t');
+    // `%(upstream:track)` is exactly "[gone]" when the upstream is missing;
+    // otherwise it is empty (no upstream / in sync) or an ahead-behind summary
+    // such as "[ahead 1, behind 2]".
+    if (!name || track?.trim() !== '[gone]') {
+      continue;
+    }
+    if (name !== current && !isProtectedBranch(name, cfg.protected)) {
+      gone.push(name);
     }
   }
 
@@ -976,16 +983,22 @@ export async function listLocalBranchesWithStatus(
 export async function getRemoteBranchLastCommitDates(
   cwd: string
 ): Promise<Map<string, { date: string; ageInDays: number; author?: string }>> {
-  const fmt = '%(refname:short)\t%(committerdate:iso-strict)\t%(authorname)';
+  // %(refname) is included purely to spot HEAD pointers: %(refname:short)
+  // collapses refs/remotes/origin/HEAD to bare "origin", so a `/HEAD` suffix
+  // test on the short name never fires and a phantom "origin" entry lands in
+  // the map. The full ref is unambiguous — same test listRemoteBranches uses.
+  const fmt = '%(refname)\t%(refname:short)\t%(committerdate:iso-strict)\t%(authorname)';
   const { stdout } = await runGit(cwd, ['for-each-ref', '--format', fmt, 'refs/remotes']);
 
   const now = Date.now();
   const result = new Map<string, { date: string; ageInDays: number; author?: string }>();
 
   for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
-    const [name, dateStr, author] = line.split('\t');
-    // Skip HEAD pointers
-    if (name && dateStr && !name.endsWith('/HEAD')) {
+    const [fullRef, name, dateStr, author] = line.split('\t');
+    if (!fullRef || /\/HEAD$/.test(fullRef)) {
+      continue;
+    }
+    if (name && dateStr) {
       const commitDate = new Date(dateStr);
       const ageInDays = Math.floor((now - commitDate.getTime()) / (1000 * 60 * 60 * 24));
       result.set(name, { date: dateStr, ageInDays, author: author || undefined });
@@ -1010,11 +1023,24 @@ export async function detectMergedRemoteBranches(cwd: string, base: string): Pro
   const merged = new Set<string>();
   for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
     const name = line.trim();
-    // Skip HEAD pointers and the base branch itself.
-    // base is typically a short name ("main"), but could be "origin/main" if user configured it.
-    // name is always in "origin/main" form, so compare both ways.
+    if (!name) {
+      continue;
+    }
+    // `git branch -r` prints the symbolic ref as "origin/HEAD -> origin/main"
+    // whenever origin/HEAD is set (the normal state after a clone), so an
+    // endsWith('/HEAD') test never fires and the whole arrow string used to be
+    // added as if it were a branch. Match the arrow; keep the suffix test for
+    // any form that prints the pointer bare.
+    if (name.includes(' -> ') || name.endsWith('/HEAD')) {
+      continue;
+    }
+    // Skip the base branch itself. `base` is typically a short name ("main")
+    // but may be configured as "origin/main", so compare both ways. Stripping
+    // the remote also excludes another remote's copy of the base (e.g.
+    // "fork/main") — deliberate: that is that remote's base branch, not a
+    // cleanup candidate.
     const branchNameWithoutRemote = name.split('/').slice(1).join('/');
-    if (name && !name.endsWith('/HEAD') && branchNameWithoutRemote !== base && name !== base) {
+    if (branchNameWithoutRemote !== base && name !== base) {
       merged.add(name);
     }
   }

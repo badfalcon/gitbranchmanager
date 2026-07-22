@@ -4,11 +4,16 @@
 
 - **Protected branches could be deleted by the deletion queue.** The queue stores only branch names, so a branch queued before the `protectedBranches` list was edited (e.g. adding `release/*`) was still deleted by **Execute**. Execute now re-checks protection per item, matching what single retries already did
 - **Remote branches could be deleted with `allowRemoteBranchDeletion` turned off.** Queued remote entries — and the "also delete corresponding remote branches" expansion — bypassed the setting during batch execution. Both are now gated on it, and the preview's "also delete remote" checkbox is hidden (and cleared) when remote deletion is disabled
+- **Switching repository mid-execution left the queue pointing at the wrong repository.** The queue cannot be dropped while a batch is in flight, but the repository reference was reassigned immediately — so afterwards the queued names belonged to the old repository while retries ran against the new one, deleting a same-named branch (`develop`, `feature/login`, …) in the wrong repo. The switch is now applied when execution ends, clearing the queue with a notification; **Switch Repository** is also hidden while a batch runs
+- **Branches checked out in a linked worktree were never detected as "gone".** Detection parsed `git branch -vv`, whose human column layout inserts the worktree path between the commit SHA and the tracking bracket (`+ feat a4377dd (/path/wt) [origin/feat: gone] subject`), so those lines matched nothing. Detection now reads the machine-readable `%(upstream:track)` field from `git for-each-ref`
+- The remote HEAD pointer was not filtered where git's real output differs from what the code expected: `git branch -r` prints it as `origin/HEAD -> origin/main` (never matching a `/HEAD` suffix test), and `%(refname:short)` renders it as bare `origin`. Both put phantom entries into internal lookup tables
+- A rare race let a second batch start while **Switch & Delete** was still resolving the base branch, running two deletion flows at once
 
 ## Changed
 
 - The confirmation for deleting untracked same-name remote branches now lists the branches instead of only their count — these were never tracked locally, so a same-name match on the server may belong to someone else
 - The batch confirmation now breaks down what will actually be deleted (local / remote counts, plus any remote branches added by "also delete remote"), instead of showing a single count that excluded the remote expansions
+- Re-sorting the cleanup preview no longer redraws a partially-checked "select all" as unchecked — a single click to re-check everything could silently restore branches you had deliberately excluded
 
 # [1.7.0] - 2026-07-22
 
