@@ -293,6 +293,7 @@
     "release": "node scripts/release.mjs"
   },
   "devDependencies": {
+    "@types/jsdom": "^28.0.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "@types/sinon": "^21.0.0",
@@ -301,6 +302,7 @@
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.2",
     "eslint": "^9.39.1",
+    "jsdom": "^29.1.1",
     "ovsx": "^1.0.2",
     "sinon": "^21.0.1",
     "ts-loader": "^9.5.4",

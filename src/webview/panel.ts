@@ -622,16 +622,28 @@ function toBase64UnicodeJson(value: unknown): string {
   return Buffer.from(json, 'utf8').toString('base64');
 }
 
-async function getHtmlFromFile(context: vscode.ExtensionContext, nonce: string): Promise<string> {
+/**
+ * Substitute the template placeholders in the raw webview HTML. Pure and
+ * exported so the webview tests can boot the *shipped* file through the exact
+ * same rendering the extension uses — replicating this substitution in the test
+ * would let the two drift apart.
+ */
+export function renderWebviewHtml(
+  rawHtml: string,
+  nonce: string,
+  i18n: WebviewI18n = getWebviewI18n()
+): string {
   const csp = `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';`;
 
-  const htmlPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'branchManager.html');
-  const html = await readFile(htmlPath.fsPath, 'utf8');
-
-  const i18n = getWebviewI18n();
-
-  return html
+  return rawHtml
     .replaceAll('{{CSP}}', csp)
     .replaceAll('{{NONCE}}', nonce)
     .replaceAll('{{I18N_B64}}', toBase64UnicodeJson(i18n));
+}
+
+async function getHtmlFromFile(context: vscode.ExtensionContext, nonce: string): Promise<string> {
+  const htmlPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'branchManager.html');
+  const html = await readFile(htmlPath.fsPath, 'utf8');
+
+  return renderWebviewHtml(html, nonce);
 }

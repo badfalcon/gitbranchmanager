@@ -232,13 +232,23 @@ Two-way message flow between extension and webview:
 
 ## Testing
 
-Three suites, all run by `npm test` (Mocha + Assert + Sinon inside the VS Code test host):
+Four suites, all run by `npm test` (Mocha + Assert + Sinon inside the VS Code test host):
 
 **[src/test/extension.test.ts](src/test/extension.test.ts)** — pure functions (`isProtectedBranch`, `parseTrackShort`, `escapeHtml`, `simpleBranchNameValidator`, `classifyDeletionCause` / `resolveDeletionCause`, `splitRemoteRef`) plus git functions with `runGit()` stubbed.
 
 **[src/test/queue.test.ts](src/test/queue.test.ts)** — `QueueTreeProvider` behavior: the batch force-delete prompt, and execute-time revalidation (protection, `allowRemoteBranchDeletion`, repository switches mid-batch). Stubs `runGit`, `getCfg`, and `confirm`.
 
 **[src/test/integration.test.ts](src/test/integration.test.ts)** — runs against **real git repositories**; nothing is stubbed. The fixture builds a linked worktree, a second remote, `origin/HEAD`, gone/merged/stale branches and backdated commits in a temp dir.
+
+**[src/test/webview.test.ts](src/test/webview.test.ts)** — loads the shipped [media/branchManager.html](media/branchManager.html) into jsdom via the exported `renderWebviewHtml()` and drives it: selection, cleanup preview, filter/sort, escaping, row actions. The invariant it protects is that **what the user sees selected equals what is sent as `addToQueue`**.
+>
+> Two things to know when adding to it. `acquireVsCodeApi` must be injected in
+> jsdom's `beforeParse` hook — the inline script calls it as the body parses, so
+> anything later is too late. And objects the script posts are built in jsdom's
+> realm, so `assert.deepStrictEqual` fails on prototype identity against plain
+> outer-realm literals; the suite's `plain()` helper JSON-round-trips them.
+> Assert through the DOM and postMessage payloads, never the script's internal
+> variables (`selectedKeys`, `previewSelected`).
 
 > **Why the integration suite exists — read before adding a mocked parsing test.**
 > A mock encodes an assumption about git's output. If the parsing code holds the
